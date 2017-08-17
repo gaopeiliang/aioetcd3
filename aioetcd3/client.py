@@ -1,32 +1,43 @@
 import grpc
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
+from aioetcd3.lease import Lease
 
 
-class Client(object):
-    def __init__(self, host='localhost', port=2379,
+class Client(KV, Lease):
+    def __init__(self, endpoints,
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None):
-        self._url = '{host}:{port}'.format(host=host, port=port)
+        self.channel, self.credentials = self.create_grpc_channel(endpoints=endpoints,
+                                                                  ca_cert=ca_cert,
+                                                                  cert_key=cert_key, cert_cert=cert_cert)
+        self.timeout = timeout
+        super().__init__(self.channel, self.timeout)
+    #
+    # def update_server_list(self, ...):
+    #     ...
+    #     self.channel = ...
+    #     self._update_channel(self.channel)
 
+    def create_grpc_channel(self, endpoints, ca_cert=None, cert_key=None, cert_cert=None):
         cert_params = [c is not None for c in (cert_cert, cert_key, ca_cert)]
+        credentials = None
         if all(cert_params):
             # all the cert parameters are set
             credentials = self._get_secure_creds(ca_cert,
                                                  cert_key,
                                                  cert_cert)
-            self.channel = grpc.secure_channel(self._url, credentials)
+            channel = grpc.secure_channel(endpoints, credentials)
         elif any(cert_params):
             # some of the cert parameters are set
             raise ValueError('the parameters cert_cert, cert_key and ca_cert '
                              'must all be set to use a secure channel')
         else:
-            self.channel = grpc.insecure_channel(self._url)
+            channel = grpc.insecure_channel(endpoints)
 
         # use aiogrpc to decorate channel
-        self.channel = Channel(self.channel)
+        channel = Channel(channel)
 
-        self.timeout = timeout
-        self.kv = KV(self, self.channel, self.timeout)
+        return channel, credentials
 
     @staticmethod
     def _get_secure_creds(ca_cert, cert_key, cert_cert):
@@ -40,11 +51,10 @@ class Client(object):
                     )
 
 
-def client(host='localhost', port=2379,
+def client(endpoints,
            ca_cert=None, cert_key=None, cert_cert=None, timeout=None):
-    """Return an instance of an AioEtcd3Client."""
-    return Client(host=host,
-                  port=port, ca_cert=ca_cert, cert_key=cert_key,
+
+    return Client(endpoints=endpoints, ca_cert=ca_cert, cert_key=cert_key,
                   cert_cert=cert_cert, timeout=timeout)
 
 

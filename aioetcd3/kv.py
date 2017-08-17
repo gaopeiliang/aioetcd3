@@ -1,5 +1,5 @@
 from aioetcd3.rpc import rpc_pb2 as rpc
-from aioetcd3.utils import to_bytes, increment_last_byte
+from aioetcd3.utils import to_bytes
 from aioetcd3.base import StubMixin
 from inspect import getcallargs
 import functools
@@ -47,6 +47,15 @@ def _kv(request_builder, response_builder, method):
             return response_builder(await self.grpc_call(method(self), request, timeout=timeout))
         return grpc_func
     return _decorator
+
+
+def _create_txn_response_builder(success, fail):
+    def _response_builder(response):
+        if response.succeeded:
+            return True, [t[1](r) for t, r in zip(success, response.responses)]
+        else:
+            return False, [t[1](r) for t, r in zip(fail, response.responses)]
+    return _response_builder
 
 
 def _put_key_range(obj, key_range):
@@ -187,7 +196,22 @@ class KV(StubMixin):
     async def pop(self, key_range, timeout=None):
         pass
 
-    async def txn(self, compare, success, fail):
-        pass
+    @staticmethod
+    def _compare_request(compare, success, fail):
+        compare_message = [c.build_message for c in compare]
+        success_message = [rpc.RequestOp(request=r) for r, _ in success]
+        fail_message = [rpc.RequestOp(request=r) for r, _ in fail]
+        request = rpc.TxnRequest(compare=compare_message, success=success_message, fail=fail_message)
+        return request
 
+    async def txn(self, compare, success, fail=[], *, timeout=None):
+        request, response_builder = KV._txn_txn(compare, success, fail, timeout=None)
+        return response_builder(await self.grpc_call(self._kv_stub.Txn, request, timeout))
+
+    @staticmethod
+    def _txn_txn(compare, success, fail=[], *, timeout=None):
+        return (KV._compare_request(compare, success, fail),
+                _create_txn_response_builder(success, fail))
+
+    txn.txn = _txn_txn
 

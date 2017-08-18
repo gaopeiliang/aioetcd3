@@ -133,14 +133,14 @@ def _delete_request(key_range, prev_kv=False):
     return delete_request
 
 
-def get_response(response):
+def _get_response(response):
     if response.kvs:
         return response.kvs[0].value, KVMetadata(response.kvs[0])
     else:
         return None, None
 
 
-def range_keys_response(response):
+def _range_keys_response(response):
     result = []
     for kv in response.kvs:
         result.append((kv.key, KVMetadata(kv)))
@@ -148,7 +148,7 @@ def range_keys_response(response):
     return result
 
 
-def delete_response(response, prev_kv=False, **kwargs):
+def _delete_response(response, prev_kv=False, **kwargs):
     if not prev_kv:
         r = []
         for kv in response.prev_kvs:
@@ -158,7 +158,7 @@ def delete_response(response, prev_kv=False, **kwargs):
         return []
 
 
-def put_response(response, prev_kv=False, **kwargs):
+def _put_response(response, prev_kv=False, **kwargs):
     if not prev_kv:
         return response.prev_kv.value, KVMetadata(response.prev_kv)
     else:
@@ -191,7 +191,7 @@ class KV(StubMixin):
                     max_mod_revision=None, min_create_revision=None, max_create_revision=None):
         pass
 
-    @_kv(functools.partial(_range_request, keys_only=True), _static_builder(range_keys_response),
+    @_kv(functools.partial(_range_request, keys_only=True), _static_builder(_range_keys_response),
          lambda x: x._kv_stub.Range)
     async def range_keys(self, key_range, limit=None, revison=None, sort_order=None,
                          sort_target='key', timeout=None, serializable=None, count_only=None,
@@ -199,21 +199,21 @@ class KV(StubMixin):
                          max_create_revision=None):
         pass
 
-    @_kv(_range_request, _static_builder(get_response), lambda x: x._kv_stub.Range)
+    @_kv(_range_request, _static_builder(_get_response), lambda x: x._kv_stub.Range)
     async def get(self, key_range, revision=None, timeout=None, serializable=None,
                   min_mod_revision=None, max_mod_revision=None, min_create_revision=None,
                   max_create_revision=None):
         pass
 
-    @_kv(_put_request, _partial_builder(put_response), lambda x: x._kv_stub.Put)
+    @_kv(_put_request, _partial_builder(_put_response), lambda x: x._kv_stub.Put)
     async def put(self, key, value, lease=0, prev_kv=False, timeout=None, ignore_value=False, ignore_lease=False):
         pass
 
-    @_kv(_delete_request, _partial_builder(delete_response), lambda x: x._kv_stub.DeleteRange)
+    @_kv(_delete_request, _partial_builder(_delete_response), lambda x: x._kv_stub.DeleteRange)
     async def delete(self, key_range, timeout=None, prev_kv=False):
         pass
 
-    @_kv(functools.partial(_delete_request, prev_kv=True), _partial_builder(delete_response),
+    @_kv(functools.partial(_delete_request, prev_kv=True), _partial_builder(_delete_response),
          lambda x: x._kv_stub.DeleteRange)
     async def pop(self, key_range, timeout=None):
         pass

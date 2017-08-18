@@ -38,18 +38,19 @@ def _get_grpc_args(func, *args, **kwargs):
 def _kv(request_builder, response_builder, method):
     def _decorator(f):
         def txn(*args, timeout=None, **kwargs):
-            return (request_builder(**_get_grpc_args(f, *args, **kwargs)), response_builder)
+            call_args = _get_grpc_args(f, *args, **kwargs)
+            return (request_builder(**call_args), response_builder(**call_args))
         f.txn = txn
 
         @functools.wraps(f)
         async def grpc_func(self, *args, timeout=None, **kwargs):
-            request = request_builder(**_get_grpc_args(f, *args, **kwargs))
-            return response_builder(await self.grpc_call(method(self), request, timeout=timeout))
+            request, response = txn(*args, **kwargs)
+            return response(await self.grpc_call(method(self), request, timeout=timeout))
         return grpc_func
     return _decorator
 
 
-def _create_txn_response_builder(success, fail):
+def _create_txn_response_builder(success, fail, **kwargs):
     def _response_builder(response):
         if response.succeeded:
             return True, [t[1](r) for t, r in zip(success, response.responses)]
@@ -71,61 +72,113 @@ def _put_key_range(obj, key_range):
     return obj
 
 
+def _range_request(key_range, sort_order=None, sort_target='key', **kwargs):
+    range_request = rpc.RangeRequest()
+    _put_key_range(range_request, key_range)
+
+    for k, v in kwargs.items():
+        if v is not None:
+            setattr(range_request, k, v)
+
+    if sort_order in _sort_order_dict:
+        range_request.sort_order = _sort_order_dict[sort_order]
+    else:
+        raise ValueError('unknown sort order: "{}"'.format(sort_order))
+
+    if sort_target in _sort_target_dict:
+        range_request.sort_target=_sort_target_dict[sort_target]
+    else:
+        raise ValueError('sort_target must be one of "key", '
+                         '"version", "create", "mod" or "value"')
+
+    return range_request
+
+
+def _range_response(kv_response):
+    result = []
+    for kv in kv_response.kvs:
+        result.append((kv.key, kv.value, KVMetadata(kv)))
+    return result
+
+
+def _static_builder(f):
+    def _builder(*args, **kwargs):
+        return f
+    return _builder
+
+
+def _partial_builder(f):
+    def _builder(**kwargs):
+        return functools.partial(f, **kwargs)
+    return _builder
+
+
+def _put_request(key, value, lease=None, prev_kv=False, ignore_value=False, ignore_lease=False):
+    if lease is None:
+        lease = 0
+    elif hasattr(lease, 'id'):
+        lease = lease.id
+    put_request = rpc.PutRequest(key=to_bytes(key), value=to_bytes(value),
+                                 lease=lease,
+                                 prev_kv=prev_kv, ignore_value=ignore_value,
+                                 ignore_lease=ignore_lease)
+    return put_request
+
+
+def _delete_request(key_range, prev_kv=False):
+
+    delete_request = rpc.DeleteRangeRequest(prev_kv=prev_kv)
+    _put_key_range(delete_request, key_range)
+
+    return delete_request
+
+
+def get_response(response):
+    if response.kvs:
+        return response.kvs[0].value, KVMetadata(response.kvs[0])
+    else:
+        return None, None
+
+
+def range_keys_response(response):
+    result = []
+    for kv in response.kvs:
+        result.append((kv.key, KVMetadata(kv)))
+
+    return result
+
+
+def delete_response(response, prev_kv=False, **kwargs):
+    if not prev_kv:
+        r = []
+        for kv in response.prev_kvs:
+            r.append((kv.value, KVMetadata(kv)))
+        return r
+    else:
+        return []
+
+
+def put_response(response, prev_kv=False, **kwargs):
+    if not prev_kv:
+        return response.prev_kv.value, KVMetadata(response.prev_kv)
+    else:
+        return None, None
+
+
+def _compare_request(compare, success, fail):
+    compare_message = [c.build_message for c in compare]
+    success_message = [rpc.RequestOp(request=r) for r, _ in success]
+    fail_message = [rpc.RequestOp(request=r) for r, _ in fail]
+    request = rpc.TxnRequest(compare=compare_message, success=success_message, fail=fail_message)
+    return request
+
+
 class KV(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
         self._kv_stub = rpc.KVStub(channel)
 
-    @staticmethod
-    def _range_request(key_range, sort_order=None, sort_target='key', **kwargs):
-        range_request = rpc.RangeRequest()
-        _put_key_range(range_request, key_range)
-
-        for k,v in kwargs.items():
-            if v is not None:
-                setattr(range_request, k, v)
-
-        if sort_order in _sort_order_dict:
-            range_request.sort_order = _sort_order_dict[sort_order]
-        else:
-            raise ValueError('unknown sort order: "{}"'.format(sort_order))
-
-        if sort_target in _sort_target_dict:
-            range_request.sort_target=_sort_target_dict[sort_target]
-        else:
-            raise ValueError('sort_target must be one of "key", '
-                             '"version", "create", "mod" or "value"')
-
-        return range_request
-
-    @staticmethod
-    def _range_response(kv_response):
-        result = []
-        for kv in kv_response.kvs:
-            result.append((kv.key, kv.value, KVMetadata(kv)))
-        return result
-
-    @staticmethod
-    def _put_request(key, value, lease=None, pre_kv=False, ignore_value=False, ignore_lease=False):
-        if lease is None:
-            lease = 0
-        elif hasattr(lease, 'id'):
-            lease = lease.id
-        put_request = rpc.PutRequest(key=to_bytes(key), value=to_bytes(value),
-                                     lease=lease,
-                                     pre_kv=pre_kv, ignore_value=ignore_value,
-                                     ignore_lease=ignore_lease)
-        return put_request
-
-    @staticmethod
-    def _delete_request(key_range, prev_kv=False):
-
-        delete_request = rpc.DeleteRangeRequest(prev_kv=prev_kv)
-        _put_key_range(delete_request, key_range)
-
-        return delete_request
-
-    @_kv(_range_request, _range_response, lambda x: x._kv_stub.Range)
+    @_kv(_range_request, _static_builder(_range_response), lambda x: x._kv_stub.Range)
     async def range(self, key_range, limit=None, revision=None, sort_order=None, sort_target='key',
                     serializable=None, keys_only=None, count_only=None, min_mod_revision=None, max_mod_revision=None,
                     min_create_revision=None, max_create_revision=None):
@@ -133,20 +186,12 @@ class KV(StubMixin):
         pass
 
     @_kv(functools.partial(_range_request, count_only=True),
-         lambda r: r.count, lambda x: x._kv_stub.Range)
+         _static_builder(lambda r: r.count), lambda x: x._kv_stub.Range)
     async def count(self, key_range, revision=None, timeout=None, min_mod_revision=None,
                     max_mod_revision=None, min_create_revision=None, max_create_revision=None):
         pass
 
-    @staticmethod
-    def range_keys_response(response):
-        result = []
-        for kv in response.kvs:
-            result.append((kv.key, KVMetadata(kv)))
-
-        return result
-
-    @_kv(functools.partial(_range_request, keys_only=True), range_keys_response,
+    @_kv(functools.partial(_range_request, keys_only=True), _static_builder(range_keys_response),
          lambda x: x._kv_stub.Range)
     async def range_keys(self, key_range, limit=None, revison=None, sort_order=None,
                          sort_target='key', timeout=None, serializable=None, count_only=None,
@@ -154,64 +199,25 @@ class KV(StubMixin):
                          max_create_revision=None):
         pass
 
-    @staticmethod
-    def get_response(response):
-        if response.kvs:
-            return response.kvs[0].value, KVMetadata(response.kvs[0])
-        else:
-            return None, None
-
-    @_kv(_range_request, get_response, lambda x: x._kv_stub.Range)
+    @_kv(_range_request, _static_builder(get_response), lambda x: x._kv_stub.Range)
     async def get(self, key_range, revision=None, timeout=None, serializable=None,
                   min_mod_revision=None, max_mod_revision=None, min_create_revision=None,
                   max_create_revision=None):
         pass
 
-    @staticmethod
-    def put_response(response):
-        if response.prev_kv:
-            return response.prev_kv.value, KVMetadata(response.prev_kv)
-        else:
-            return None, None
-
-    @_kv(_put_request, put_response, lambda x: x._kv_stub.Put)
-    async def put(self, key, value, lease=0, pre_kv=False, timeout=None, ignore_value=False, ignore_lease=False):
+    @_kv(_put_request, _partial_builder(put_response), lambda x: x._kv_stub.Put)
+    async def put(self, key, value, lease=0, prev_kv=False, timeout=None, ignore_value=False, ignore_lease=False):
         pass
 
-    @staticmethod
-    def delete_response(response):
-        if response.prev_kvs:
-            r = []
-            for kv in response.prev_kvs:
-                r.append((kv.value, KVMetadata(kv)))
-            return r
-        else:
-            return []
-
-    @_kv(_delete_request, delete_response, lambda x: x._kv_stub.DeleteRange)
+    @_kv(_delete_request, _partial_builder(delete_response), lambda x: x._kv_stub.DeleteRange)
     async def delete(self, key_range, timeout=None, prev_kv=False):
         pass
 
-    @_kv(functools.partial(_delete_request, prev_kv=True), delete_response, lambda x: x._kv_stub.DeleteRange)
+    @_kv(functools.partial(_delete_request, prev_kv=True), _partial_builder(delete_response),
+         lambda x: x._kv_stub.DeleteRange)
     async def pop(self, key_range, timeout=None):
         pass
 
-    @staticmethod
-    def _compare_request(compare, success, fail):
-        compare_message = [c.build_message for c in compare]
-        success_message = [rpc.RequestOp(request=r) for r, _ in success]
-        fail_message = [rpc.RequestOp(request=r) for r, _ in fail]
-        request = rpc.TxnRequest(compare=compare_message, success=success_message, fail=fail_message)
-        return request
-
+    @_kv(_compare_request, _create_txn_response_builder, lambda x: x._kv_stub.Txn)
     async def txn(self, compare, success, fail=[], *, timeout=None):
-        request, response_builder = KV._txn_txn(compare, success, fail, timeout=None)
-        return response_builder(await self.grpc_call(self._kv_stub.Txn, request, timeout))
-
-    @staticmethod
-    def _txn_txn(compare, success, fail=[], *, timeout=None):
-        return (KV._compare_request(compare, success, fail),
-                _create_txn_response_builder(success, fail))
-
-    txn.txn = _txn_txn
-
+        pass

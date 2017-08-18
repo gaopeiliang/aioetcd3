@@ -118,10 +118,16 @@ def _put_request(key, value, lease=None, prev_kv=False, ignore_value=False, igno
         lease = 0
     elif hasattr(lease, 'id'):
         lease = lease.id
-    put_request = rpc.PutRequest(key=to_bytes(key), value=to_bytes(value),
-                                 lease=lease,
+    put_request = rpc.PutRequest(key=to_bytes(key),
                                  prev_kv=prev_kv, ignore_value=ignore_value,
                                  ignore_lease=ignore_lease)
+
+    if not ignore_value:
+        put_request.value = to_bytes(value)
+
+    if not ignore_lease:
+        put_request.lease = lease
+
     return put_request
 
 

@@ -155,7 +155,9 @@ def _range_keys_response(response):
 
 
 def _delete_response(response, prev_kv=False, **kwargs):
-    if prev_kv:
+    # when set prev_kv to return prev value,
+    # but it is not existed , response has no prev_kvs
+    if prev_kv and hasattr(response, 'prev_kvs'):
         r = []
         for kv in response.prev_kvs:
             r.append((kv.value, KVMetadata(kv)))
@@ -165,17 +167,29 @@ def _delete_response(response, prev_kv=False, **kwargs):
 
 
 def _put_response(response, prev_kv=False, **kwargs):
-    if prev_kv:
+
+    # when set prev_kv to return prev value,
+    # but it is not existed , response has no prev_kv
+    if prev_kv and hasattr(response, 'prev_kv'):
         return response.prev_kv.value, KVMetadata(response.prev_kv)
     else:
         return None, None
 
 
+def _create_op_request(request):
+    if isinstance(request, rpc.PutRequest):
+        return rpc.RequestOp(request_put=request)
+    if isinstance(request, rpc.RangeRequest):
+        return rpc.RequestOp(request_range=request)
+    if isinstance(request, rpc.DeleteRangeRequest):
+        return rpc.RequestOp(request_delete_range=request)
+
+
 def _compare_request(compare, success, fail):
-    compare_message = [c.build_message for c in compare]
-    success_message = [rpc.RequestOp(request=r) for r, _ in success]
-    fail_message = [rpc.RequestOp(request=r) for r, _ in fail]
-    request = rpc.TxnRequest(compare=compare_message, success=success_message, fail=fail_message)
+    compare_message = [c.build_message() for c in compare]
+    success_message = [_create_op_request(request=r) for r, _ in success]
+    fail_message = [_create_op_request(request=r) for r, _ in fail]
+    request = rpc.TxnRequest(compare=compare_message, success=success_message, failure=fail_message)
     return request
 
 
@@ -185,7 +199,7 @@ class KV(StubMixin):
         self._kv_stub = rpc.KVStub(channel)
 
     @_kv(_range_request, _static_builder(_range_response), lambda x: x._kv_stub.Range)
-    async def range(self, key_range, limit=None, revision=None, sort_order=None, sort_target='key',
+    async def range(self, key_range, limit=None, revision=None, timeout=None, sort_order=None, sort_target='key',
                     serializable=None, keys_only=None, count_only=None, min_mod_revision=None, max_mod_revision=None,
                     min_create_revision=None, max_create_revision=None):
         # implemented in decorator
@@ -219,7 +233,8 @@ class KV(StubMixin):
     async def delete(self, key_range, timeout=None, prev_kv=False):
         pass
 
-    @_kv(functools.partial(_delete_request, prev_kv=True), _partial_builder(_delete_response),
+    @_kv(functools.partial(_delete_request, prev_kv=True),
+         _partial_builder(functools.partial(_delete_response, prev_kv=True)),
          lambda x: x._kv_stub.DeleteRange)
     async def pop(self, key_range, timeout=None):
         pass

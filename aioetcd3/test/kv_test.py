@@ -32,7 +32,7 @@ class KVTest(unittest.TestCase):
 
         for i in range(0, 10):
             key = '/test' + str(i)
-            value, meta = await self.client.put(key, i)
+            value, meta = await self.client.put(key, str(i))
             self.assertIsNone(value)
             self.assertIsNone(meta)
 
@@ -109,19 +109,25 @@ class KVTest(unittest.TestCase):
             KV.delete.txn('/trans1')
         ])
 
-        if is_success:
-            self.assertEqual(len(response), 2)
-            del_response = response[0]
-            self.assertIsNone(del_response[0])
-            self.assertIsNone(del_response[1])
-            put_response = response[1]
-            self.assertIsNotNone(put_response[0])
-            self.assertIsNotNone(put_response[1])
-        else:
-            self.assertEqual(len(response), 1)
-            del_response = response[0]
-            self.assertIsNone(del_response[0])
-            self.assertIsNone(del_response[1])
+        self.assertEqual(is_success, True)
+        self.assertEqual(len(response), 2)
+        del_response = response[0]
+        self.assertEqual(len(del_response), 0)
+        put_response = response[1]
+        self.assertIsNone(put_response[0])
+        self.assertIsNone(put_response[1])
+
+        is_success, response = await self.client.txn(compare=[
+            transaction.Value('/trans3') != b'trans3',
+        ], success=[
+        ], fail=[
+            KV.delete.txn('/trans3')
+        ])
+
+        self.assertEqual(is_success, False)
+        self.assertEqual(len(response), 1)
+        self.assertEqual(len(response[0]), 0)
+
 
 
 

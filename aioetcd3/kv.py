@@ -149,7 +149,7 @@ def _range_keys_response(response):
 
 
 def _delete_response(response, prev_kv=False, **kwargs):
-    if not prev_kv:
+    if prev_kv:
         r = []
         for kv in response.prev_kvs:
             r.append((kv.value, KVMetadata(kv)))
@@ -159,7 +159,7 @@ def _delete_response(response, prev_kv=False, **kwargs):
 
 
 def _put_response(response, prev_kv=False, **kwargs):
-    if not prev_kv:
+    if prev_kv:
         return response.prev_kv.value, KVMetadata(response.prev_kv)
     else:
         return None, None

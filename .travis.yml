@@ -1,0 +1,26 @@
+sudo: required
+
+language: python
+
+python:
+  - "3.5"
+  - "3.6"
+
+
+services:
+  - docker
+
+install:
+  - pip install codecov
+  - pip install coverage
+  - pip install -r requirements.txt
+  - docker run -p 2379:2379 -p 2380:2380 --name etcd-v3.2 --volume=/tmp/etcd-data:/etcd-data gcr.io/etcd-development/etcd:v3.2 /usr/local/bin/etcd --name my-etcd-1 --data-dir /etcd-data --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://0.0.0.0:2379 --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://0.0.0.0:2380 --initial-cluster my-etcd-1=http://0.0.0.0:2380 --initial-cluster-token 123456789 --initial-cluster-state new --auto-compaction-retention 1
+
+
+script:
+  - coverage run -m unittest discover
+  - coverage report -m
+
+after_success:
+  - codecov
+

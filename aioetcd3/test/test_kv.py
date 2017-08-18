@@ -18,7 +18,7 @@ def asynctest(f):
 class KVTest(unittest.TestCase):
 
     def setUp(self):
-        endpoints = "100.73.46.3:2379"
+        endpoints = "127.0.0.1:2379"
         self.client = client(endpoints=endpoints)
 
         self.tearDown()

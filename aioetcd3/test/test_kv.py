@@ -60,9 +60,10 @@ class KVTest(unittest.TestCase):
 
         value_list = await self.client.range(key_range=range_all())
         self.assertEqual(len(value_list), 10)
-        value = [str(v[0]) for v in value_list]
+        value = [v[1].decode('utf-8') for v in value_list]
+        value.sort()
         real_value = [str(i) for i in range(0, 10)]
-        self.assertEqual(value.sort(), real_value)
+        self.assertEqual(value, real_value)
 
         value_list = await self.client.range(key_range=range_all(), limit=5)
         self.assertEqual(len(value_list), 5)
@@ -75,10 +76,10 @@ class KVTest(unittest.TestCase):
 
         value_list = await self.client.range(key_range=range_greater('/test8'))
         self.assertEqual(len(value_list), 2)
-        self.assertEqual(value_list[0][0], b'8')
-        self.assertEqual(value_list[1][0], b'9')
+        self.assertEqual(value_list[0][1], b'8')
+        self.assertEqual(value_list[1][1], b'9')
 
-        value_list = await self.client.range(key_range=range_greater('/test10'))
+        value_list = await self.client.range(key_range=range_greater('/testa'))
         self.assertEqual(len(value_list), 0)
 
         await self.client.delete(key_range='/test9')
@@ -90,7 +91,7 @@ class KVTest(unittest.TestCase):
         self.assertEqual(len(value_list), 1)
         self.assertEqual(value_list[0][0], b'8')
 
-        value_list = await self.client.delete(key_range=range_prefix('/'))
+        value_list = await self.client.delete(key_range=range_prefix('/'), prev_kv=True)
         self.assertEqual(len(value_list), 8)
 
     @asynctest

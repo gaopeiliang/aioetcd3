@@ -1,4 +1,5 @@
 from aioetcd3.rpc import rpc_pb2 as rpc
+from aioetcd3.base import StubMixin
 
 
 class RLease(object):
@@ -7,33 +8,61 @@ class RLease(object):
         self.id = id
         self.client = client
 
+    async def revoke(self):
+        return await self.client.revoke_lease(self.id)
 
-class Lease(object):
-    def __init__(self, client, channel, timeout):
-        self.client = client
-        self.stub = rpc.LeaseStub(channel=channel)
-        self.timeout = timeout
+    async def refresh(self):
+        return await self.client.refresh_lease(self.id)
 
-    async def lease(self, ttl, id=0):
+    async def info(self):
+        return await self.client.get_lease_info(self.id)
+
+
+class Lease(StubMixin):
+
+    def _update_channel(self, channel):
+        super()._update_channel(channel)
+        self._lease_stub = rpc.LeaseStub(channel)
+
+    async def grant_lease(self, ttl, id=0):
         lease_request = rpc.LeaseGrantRequest(TTL=ttl, ID=id)
 
-        lease_reponse = await self.stub.LeaseGrant(lease_request, self.timeout)
+        lease_reponse = await self._lease_stub.LeaseGrant(lease_request, self.timeout)
 
         return RLease(lease_reponse.TTL, lease_reponse.ID, self)
 
-    async def revoke_lease(self, id):
-        lease_request = rpc.LeaseRevokeRequest(ID=id)
+    async def revoke_lease(self, lease):
+        lease_id = get_lease_id(lease)
+        lease_request = rpc.LeaseRevokeRequest(ID=lease_id)
 
-        await self.stub.LeaseRevoke(lease_request, self.timeout)
+        await self._lease_stub.LeaseRevoke(lease_request, self.timeout)
 
-    async def refresh_lease(self, id):
-        lease_request = rpc.LeaseKeepAliveRequest(ID=id)
+    async def refresh_lease(self, lease):
+        lease_id = get_lease_id(lease)
+        lease_request = rpc.LeaseKeepAliveRequest(ID=lease_id)
 
         async def generate_request():
             for request in [lease_request]:
                 yield request
 
-        async with self.stub.LeaseKeepAlive.with_scope(generate_request()) as result:
+        async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request()) as result:
             async for r in result:
                 yield RLease(r.TTL, r.ID, self)
+
+    async def get_lease_info(self, lease):
+
+        lease_id = get_lease_id(lease)
+
+        request = rpc.LeaseTimeToLiveRequest(id=lease_id, keys=True)
+
+        response = self._lease_stub.LeaseTimeToLive(request)
+
+        return RLease(response.TTL, response.ID, self), [k for k in response.keys]
+
+
+def get_lease_id(lease):
+    if hasattr(lease, 'id'):
+        return lease.id
+    else:
+        return lease
 

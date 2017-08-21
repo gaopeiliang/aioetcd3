@@ -1,5 +1,5 @@
 from aioetcd3.rpc import rpc_pb2 as rpc
-from aioetcd3.utils import to_bytes
+from aioetcd3.utils import to_bytes, put_key_range
 from aioetcd3.base import StubMixin
 from inspect import getcallargs
 import functools
@@ -59,22 +59,9 @@ def _create_txn_response_builder(success, fail, **kwargs):
     return _response_builder
 
 
-def _put_key_range(obj, key_range):
-    if isinstance(key_range, str) or isinstance(key_range, bytes):
-        obj.key = to_bytes(key_range)
-    else:
-        try:
-            key, range_end = key_range
-        except Exception:
-            raise ValueError("key_range must be either a str/bytes 'key', or ('key', 'range_end') tuple")
-        obj.key = to_bytes(key)
-        obj.range_end = to_bytes(range_end)
-    return obj
-
-
 def _range_request(key_range, sort_order=None, sort_target='key', **kwargs):
     range_request = rpc.RangeRequest()
-    _put_key_range(range_request, key_range)
+    put_key_range(range_request, key_range)
 
     for k, v in kwargs.items():
         if v is not None:
@@ -134,7 +121,7 @@ def _put_request(key, value, lease=None, prev_kv=False, ignore_value=False, igno
 def _delete_request(key_range, prev_kv=False):
 
     delete_request = rpc.DeleteRangeRequest(prev_kv=prev_kv)
-    _put_key_range(delete_request, key_range)
+    put_key_range(delete_request, key_range)
 
     return delete_request
 

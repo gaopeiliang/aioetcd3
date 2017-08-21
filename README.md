@@ -1,1 +1,1 @@
-# aioetcd3
+# aioetcd3 https://travis-ci.org/gaopeiliang/aioetcd3.svg?branch=master

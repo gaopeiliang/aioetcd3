@@ -17,7 +17,8 @@ install:
 
 
 script:
-  - coverage run --source=aioetcd3 -m unittest discover
+  - pwd
+  - coverage run -m unittest discover
   - coverage report
 
 after_success:

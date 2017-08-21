@@ -1,0 +1,4 @@
+[run]
+source = aioetcd3
+omit = aioetcd3/rpc/*
+       aioetcd3/test/*

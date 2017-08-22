@@ -2,9 +2,10 @@ import grpc
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
 from aioetcd3.lease import Lease
+from aioetcd3.auth import Auth
 
 
-class Client(KV, Lease):
+class Client(KV, Lease, Auth):
     def __init__(self, endpoints,
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None):
         self.channel, self.credentials = self.create_grpc_channel(endpoints=endpoints,

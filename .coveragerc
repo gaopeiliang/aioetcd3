@@ -2,3 +2,8 @@
 source = aioetcd3
 omit = aioetcd3/rpc/*
        aioetcd3/test/*
+       
+[report]
+exclude_lines = 
+        pragma: no cover
+        pass

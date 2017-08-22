@@ -45,19 +45,25 @@ class Lease(StubMixin):
             for request in [lease_request]:
                 yield request
 
+        new_lease = None
         async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request()) as result:
             async for r in result:
-                yield RLease(r.TTL, r.ID, self)
+                new_lease = RLease(r.TTL, r.ID, self)
+
+        return new_lease
 
     async def get_lease_info(self, lease):
 
         lease_id = get_lease_id(lease)
 
-        request = rpc.LeaseTimeToLiveRequest(id=lease_id, keys=True)
+        request = rpc.LeaseTimeToLiveRequest(ID=lease_id, keys=True)
 
-        response = self._lease_stub.LeaseTimeToLive(request)
+        response = await self._lease_stub.LeaseTimeToLive(request)
 
-        return RLease(response.TTL, response.ID, self), [k for k in response.keys]
+        if response.TTL >= 0:
+            return RLease(response.TTL, response.ID, self), [k for k in response.keys]
+        else:
+            return None, []
 
 
 def get_lease_id(lease):

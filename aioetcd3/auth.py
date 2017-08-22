@@ -61,7 +61,7 @@ class Auth(StubMixin):
     async def user_change_password(self, username, password):
         pass
 
-    @call_grpc(lambda username, role: rpc.AuthUserGrantRoleRequest(name=username, role=role), lambda r: None,
+    @call_grpc(lambda username, role: rpc.AuthUserGrantRoleRequest(user=username, role=role), lambda r: None,
                lambda s: s._auth_stub.UserGrantRole)
     async def user_grant_role(self, username, role):
         pass
@@ -85,7 +85,7 @@ class Auth(StubMixin):
     async def role_add(self, name):
         pass
 
-    @call_grpc(lambda name: rpc.AuthRoleDeleteRequest(name=name), lambda r: None, lambda s: s._auth_stub.RoleDelete)
+    @call_grpc(lambda name: rpc.AuthRoleDeleteRequest(role=name), lambda r: None, lambda s: s._auth_stub.RoleDelete)
     async def role_delete(self, name):
         pass
 
@@ -100,17 +100,17 @@ class Auth(StubMixin):
 
         return request
 
-    @call_grpc(role_grant_request, lambda r: None, lambda s: s._auth_stub.RoleGrantPermission)
+    @call_grpc(role_grant_request.__func__, lambda r: None, lambda s: s._auth_stub.RoleGrantPermission)
     async def role_grant_permission(self, name, key_range, permission):
         pass
 
     @staticmethod
     def role_revoke_request(name, key_range):
-        request = rpc.AuthUserRevokeRoleRequest(name=name)
+        request = rpc.AuthRoleRevokePermissionRequest(role=name)
         put_key_range(request, key_range)
 
         return request
 
-    @call_grpc(role_revoke_request, lambda r: None, lambda s: s._auth_stub.RoleRevokePermission)
+    @call_grpc(role_revoke_request.__func__, lambda r: None, lambda s: s._auth_stub.RoleRevokePermission)
     async def role_revoke_permission(self, name, key_range):
         pass

@@ -55,7 +55,8 @@ class AuthTest(unittest.TestCase):
     async def test_auth_3(self):
 
         await self.client.user_add(username=TEST_USER_NAME, password="test")
-        await self.client.user_grant_role(username=TEST_USER_NAME, role=TEST_ROLE_NAME)
+        with self.assertRaises(Exception):
+            await self.client.user_grant_role(username=TEST_USER_NAME, role=TEST_ROLE_NAME)
 
         await self.client.role_add(name=TEST_ROLE_NAME)
         await self.client.user_grant_role(username=TEST_USER_NAME, role=TEST_ROLE_NAME)

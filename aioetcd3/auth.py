@@ -32,8 +32,8 @@ class Auth(StubMixin):
     async def auth_disable(self):
         pass
 
-    @call_grpc(lambda u, p: rpc.AuthenticateRequest(name=u, password=p), lambda r: r.token,
-               lambda s: s._auth_stub.Authenticate)
+    @call_grpc(lambda username, password: rpc.AuthenticateRequest(name=username, password=password),
+               lambda r: r.token, lambda s: s._auth_stub.Authenticate)
     async def authenticate(self, username, password):
         pass
 
@@ -41,31 +41,32 @@ class Auth(StubMixin):
     async def user_list(self):
         pass
 
-    @call_grpc(lambda u: rpc.AuthUserGetRequest(name=u), lambda r: [r for r in r.roles],
+    @call_grpc(lambda username: rpc.AuthUserGetRequest(name=username), lambda r: [r for r in r.roles],
                lambda s: s._auth_stub.UserGet)
     async def user_get(self, username):
         pass
 
-    @call_grpc(lambda u, p: rpc.AuthUserAddRequest(name=u, password=p), lambda r: None,
+    @call_grpc(lambda username, password: rpc.AuthUserAddRequest(name=username, password=password), lambda r: None,
                lambda s: s._auth_stub.UserAdd)
     async def user_add(self, username, password):
         pass
 
-    @call_grpc(lambda u: rpc.AuthUserDeleteRequest(name=u), lambda r: None, lambda s: s._auth_stub.UserDelete)
+    @call_grpc(lambda username: rpc.AuthUserDeleteRequest(name=username), lambda r: None,
+               lambda s: s._auth_stub.UserDelete)
     async def user_delete(self, username):
         pass
 
-    @call_grpc(lambda u, p: rpc.AuthUserChangePasswordRequest(name=u, password=p), lambda r: None,
-               lambda s: s._auth_stub.UserChangePassword)
+    @call_grpc(lambda username, password: rpc.AuthUserChangePasswordRequest(name=username, password=password),
+               lambda r: None, lambda s: s._auth_stub.UserChangePassword)
     async def user_change_password(self, username, password):
         pass
 
-    @call_grpc(lambda u, r: rpc.AuthUserGrantRoleRequest(name=u, role=r), lambda r: None,
+    @call_grpc(lambda username, role: rpc.AuthUserGrantRoleRequest(name=username, role=role), lambda r: None,
                lambda s: s._auth_stub.UserGrantRole)
     async def user_grant_role(self, username, role):
         pass
 
-    @call_grpc(lambda u, r: rpc.AuthUserRevokeRoleRequest(name=u, role=r), lambda r: None,
+    @call_grpc(lambda username, role: rpc.AuthUserRevokeRoleRequest(name=username, role=role), lambda r: None,
                lambda s: s._auth_stub.UserRevokeRole)
     async def user_revoke_role(self, username, role):
         pass
@@ -75,16 +76,16 @@ class Auth(StubMixin):
     async def role_list(self):
         pass
 
-    @call_grpc(lambda role: rpc.AuthRoleGetRequest(role=role), lambda r: [p for p in r.perm],
+    @call_grpc(lambda name: rpc.AuthRoleGetRequest(role=name), lambda r: [p for p in r.perm],
                lambda s: s._auth_stub.RoleGet)
     async def role_get(self, name):
         pass
 
-    @call_grpc(lambda role: rpc.AuthRoleAddRequest(name=role), lambda r: None, lambda s: s._auth_stub.RoleAdd)
+    @call_grpc(lambda name: rpc.AuthRoleAddRequest(name=name), lambda r: None, lambda s: s._auth_stub.RoleAdd)
     async def role_add(self, name):
         pass
 
-    @call_grpc(lambda role: rpc.AuthRoleDeleteRequest(name=role), lambda r: None, lambda s: s._auth_stub.RoleDelete)
+    @call_grpc(lambda name: rpc.AuthRoleDeleteRequest(name=name), lambda r: None, lambda s: s._auth_stub.RoleDelete)
     async def role_delete(self, name):
         pass
 
@@ -104,8 +105,8 @@ class Auth(StubMixin):
         pass
 
     @staticmethod
-    def role_revoke_request(role, key_range):
-        request = rpc.AuthUserRevokeRoleRequest(name=role)
+    def role_revoke_request(name, key_range):
+        request = rpc.AuthUserRevokeRoleRequest(name=name)
         put_key_range(request, key_range)
 
         return request

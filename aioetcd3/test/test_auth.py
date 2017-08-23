@@ -3,7 +3,7 @@ import asyncio
 import functools
 
 from aioetcd3.client import client
-from aioetcd3.help import range_all, PER_RW
+from aioetcd3.help import range_all, PER_RW, range_greater
 
 
 def asynctest(f):
@@ -21,6 +21,15 @@ class AuthTest(unittest.TestCase):
     def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoints=endpoints)
+
+        auth_etcd_url = "127.0.0.1:2378"
+        self.root_client = client(endpoints=auth_etcd_url, ca_cert="aioetcd3/test/cfssl/ca.pem",
+                             cert_cert="aioetcd3/test/cfssl/client-root.pem",
+                             cert_key="aioetcd3/test/cfssl/client-root-key.pem")
+
+        self.client_client = client(endpoints=auth_etcd_url, ca_cert="aioetcd3/test/cfssl/ca.pem",
+                               cert_cert="aioetcd3/test/cfssl/client.pem",
+                               cert_key="aioetcd3/test/cfssl/client-key.pem")
 
         self.tearDown()
 
@@ -72,34 +81,28 @@ class AuthTest(unittest.TestCase):
 
     @asynctest
     async def test_auth_4(self):
-        auth_etcd_url = "127.0.0.1:2378"
-        root_client = client(endpoints=auth_etcd_url, ca_cert="test/cfssl/ca.pem",
-                             cert_cert="test/cfssl/client-root.pem",
-                             cert_key="test/cfssl/client-root-key.pem")
+        await self.root_client.user_add(username='root', password='root')
+        await self.root_client.role_add(name='root')
+        await self.root_client.user_grant_role(username='root', role='root')
+        await self.root_client.auth_enable()
 
-        client_client = client(endpoints=auth_etcd_url, ca_cert="test/cfssl/ca.pem",
-                               cert_cert="test/cfssl/client.pem",
-                               cert_key="test/cfssl/client-key.pem")
+        await self.root_client.user_add(username='client', password='client')
+        await self.root_client.role_add(name='client')
 
-        await root_client.user_add(username='root', password='root')
-        await root_client.auth_enable()
-
-        await root_client.user_add(username='client', password='client')
-        await root_client.role_add(name='client')
-
-        await root_client.put('/foo', '/foo')
-        value, meta = await root_client.get('/foo')
+        await self.root_client.put('/foo', '/foo')
+        value, meta = await self.root_client.get('/foo')
         self.assertEqual(value, b'/foo')
 
-        await client_client.get('/foo')
+        with self.assertRaises(Exception):
+            await self.client_client.get('/foo')
 
-        await root_client.role_grant_permission(name='client', key_range='/foo', permission=PER_RW)
-        await root_client.user_grant_role(username='client', role='client')
+        await self.root_client.role_grant_permission(name='client', key_range='/foo', permission=PER_RW)
+        await self.root_client.user_grant_role(username='client', role='client')
 
-        value, meta = await client_client.get('/foo')
+        value, meta = await self.client_client.get('/foo')
         self.assertEqual(value, b'/foo')
 
-        await client_client.put('/foo', 'ssss')
+        await self.client_client.put('/foo', 'ssss')
 
     async def delete_all_user(self):
         users = await self.client.user_list()
@@ -107,16 +110,28 @@ class AuthTest(unittest.TestCase):
         for u in users:
             await self.client.user_delete(username=u)
 
+        users = await self.root_client.user_list()
+
+        for u in users:
+            await self.root_client.user_delete(username=u)
+
     async def delete_all_role(self):
         roles = await self.client.role_list()
 
         for r in roles:
             await self.client.role_delete(name=r)
 
+        roles = await self.root_client.role_list()
+
+        for r in roles:
+            await self.root_client.role_delete(name=r)
+
     @asynctest
     async def tearDown(self):
 
         await self.client.delete(range_all())
+
+        await self.root_client.auth_disable()
 
         await self.delete_all_user()
         await self.delete_all_role()

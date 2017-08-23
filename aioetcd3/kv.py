@@ -59,6 +59,7 @@ def _create_txn_response_builder(success, fail, **kwargs):
     return _response_builder
 
 
+
 def _range_request(key_range, sort_order=None, sort_target='key', **kwargs):
     range_request = rpc.RangeRequest()
     put_key_range(range_request, key_range)

@@ -1,6 +1,24 @@
 from aioetcd3.rpc import rpc_pb2 as rpc
 from aioetcd3.base import StubMixin
 
+import functools
+import inspect
+
+
+def call_grpc(request, response_func, method):
+
+    def _f(f):
+        @functools.wraps(f)
+        async def call(self, *args, timeout=None, **kwargs):
+            params = inspect.getcallargs(f, self, *args, **kwargs)
+            params.pop('self')
+            r = await self.grpc_call(method(self), request(**params), timeout=timeout)
+            return response_func(r, client=self)
+
+        return call
+
+    return _f
+
 
 class RLease(object):
     def __init__(self, ttl, id, client):
@@ -24,18 +42,16 @@ class Lease(StubMixin):
         super()._update_channel(channel)
         self._lease_stub = rpc.LeaseStub(channel)
 
+    @call_grpc(lambda ttl, id: rpc.LeaseGrantRequest(TTL=ttl, ID=id),
+               lambda r, client: RLease(r.TTL, r.ID, client),
+               lambda s: s._lease_stub.LeaseGrant)
     async def grant_lease(self, ttl, id=0):
-        lease_request = rpc.LeaseGrantRequest(TTL=ttl, ID=id)
+        pass
 
-        lease_reponse = await self._lease_stub.LeaseGrant(lease_request, self.timeout)
-
-        return RLease(lease_reponse.TTL, lease_reponse.ID, self)
-
+    @call_grpc(lambda lease: rpc.LeaseRevokeRequest(ID=get_lease_id(lease)),
+               lambda r, client: None, lambda s: s._lease_stub.LeaseRevoke)
     async def revoke_lease(self, lease):
-        lease_id = get_lease_id(lease)
-        lease_request = rpc.LeaseRevokeRequest(ID=lease_id)
-
-        await self._lease_stub.LeaseRevoke(lease_request, self.timeout)
+        pass
 
     async def refresh_lease(self, lease):
         lease_id = get_lease_id(lease)
@@ -48,22 +64,16 @@ class Lease(StubMixin):
         new_lease = None
         async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request()) as result:
             async for r in result:
+                self._update_cluster_info(r.header)
                 new_lease = RLease(r.TTL, r.ID, self)
 
         return new_lease
 
+    @call_grpc(lambda lease: rpc.LeaseTimeToLiveRequest(ID=get_lease_id(lease), keys=True),
+               lambda r, client: (RLease(r.TTL, r.ID, client), [k for k in r.keys]) if r.TTL >= 0 else (None, []),
+               lambda s: s._lease_stub.LeaseTimeToLive)
     async def get_lease_info(self, lease):
-
-        lease_id = get_lease_id(lease)
-
-        request = rpc.LeaseTimeToLiveRequest(ID=lease_id, keys=True)
-
-        response = await self._lease_stub.LeaseTimeToLive(request)
-
-        if response.TTL >= 0:
-            return RLease(response.TTL, response.ID, self), [k for k in response.keys]
-        else:
-            return None, []
+        pass
 
 
 def get_lease_id(lease):

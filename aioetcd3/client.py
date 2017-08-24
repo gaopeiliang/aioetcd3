@@ -60,7 +60,9 @@ class Client(KV, Lease, Auth):
 def client(endpoints,
            ca_cert=None, cert_key=None, cert_cert=None, timeout=None):
 
-    return Client(endpoints=endpoints, ca_cert=ca_cert, cert_key=cert_key,
+    # user `ip:port,ip:port` to user grpc balance
+
+    return Client(endpoints="ipv4:///" + endpoints, ca_cert=ca_cert, cert_key=cert_key,
                   cert_cert=cert_cert, timeout=timeout)
 
 

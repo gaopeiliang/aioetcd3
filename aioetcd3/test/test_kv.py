@@ -120,6 +120,9 @@ class KVTest(unittest.TestCase):
 
         is_success, response = await self.client.txn(compare=[
             transaction.Value('/trans3') != b'trans3',
+            transaction.Version('/trans3') < 1000,
+            transaction.Mod('/trans3') > 100,
+            transaction.Create('/trans3') != 200
         ], success=[
         ], fail=[
             KV.delete.txn('/trans3')

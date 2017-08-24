@@ -3,6 +3,7 @@ from aioetcd3.base import StubMixin
 
 import functools
 import inspect
+import asyncio
 
 
 def call_grpc(request, response_func, method):
@@ -26,6 +27,27 @@ class RLease(object):
         self.id = id
         self.client = client
 
+    async def __aenter__(self):
+        lease = await self.client.grant_lease(ttl=self.ttl)
+        self.ttl = lease.ttl
+        self.id = lease.id
+
+        refresh_ttl = self.ttl // 2
+
+        async def task(cycle):
+            while True:
+                await asyncio.sleep(cycle)
+                await self.refresh()
+
+        self.refresh_task = asyncio.ensure_future(task(refresh_ttl))
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self, 'refresh_task'):
+            self.refresh_task.cancel()
+            asyncio.wait(self.refresh_task)
+        await self.revoke()
+
     async def revoke(self):
         return await self.client.revoke_lease(self.id)
 
@@ -47,6 +69,9 @@ class Lease(StubMixin):
                lambda s: s._lease_stub.LeaseGrant)
     async def grant_lease(self, ttl, id=0):
         pass
+
+    def grant_lease_scope(self, ttl, id=0):
+        return RLease(ttl, id, self)
 
     @call_grpc(lambda lease: rpc.LeaseRevokeRequest(ID=get_lease_id(lease)),
                lambda r, client: None, lambda s: s._lease_stub.LeaseRevoke)

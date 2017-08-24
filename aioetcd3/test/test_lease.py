@@ -59,6 +59,16 @@ class LeaseTest(unittest.TestCase):
         self.assertIsNone(lease)
         self.assertEqual(len(keys), 0)
 
+        lease = None
+        async with self.client.grant_lease_scope(ttl=5) as l:
+            lease = l
+            await asyncio.sleep(1)
+
+        lease, keys = await lease.info()
+        self.assertIsNone(lease)
+        self.assertEqual(len(keys), 0)
+
+
     @asynctest
     async def test_lease_3(self):
         lease = await self.client.grant_lease(ttl=5)

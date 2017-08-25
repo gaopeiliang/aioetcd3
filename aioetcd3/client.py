@@ -14,11 +14,14 @@ class Client(KV, Lease, Auth):
                                                                   cert_key=cert_key, cert_cert=cert_cert)
         self.timeout = timeout
         super().__init__(self.channel, self.timeout)
-    #
-    # def update_server_list(self, ...):
-    #     ...
-    #     self.channel = ...
-    #     self._update_channel(self.channel)
+
+    def update_server_list(self, endpoints):
+
+        if self.credentials:
+            self.channel = Channel(grpc.secure_channel(endpoints, self.credentials))
+        else:
+            self.channel = Channel(grpc.insecure_channel(endpoints))
+        self._update_channel(self.channel)
 
     def create_grpc_channel(self, endpoints, ca_cert=None, cert_key=None, cert_cert=None):
         cert_params = [c is not None for c in (cert_cert, cert_key, ca_cert)]

@@ -2,8 +2,8 @@ import unittest
 import asyncio
 import functools
 
-from aioetcd3.client import client
-from aioetcd3.help import range_all, PER_RW, range_greater
+from aioetcd3.client import client, ssl_client
+from aioetcd3.help import range_all, PER_RW
 
 
 def asynctest(f):
@@ -20,16 +20,16 @@ TEST_ROLE_NAME = 'admin'
 class AuthTest(unittest.TestCase):
     def setUp(self):
         endpoints = "127.0.0.1:2379"
-        self.client = client(endpoints=endpoints)
+        self.client = client(endpoint=endpoints)
 
         auth_etcd_url = "127.0.0.1:2378"
-        self.root_client = client(endpoints=auth_etcd_url, ca_cert="aioetcd3/test/cfssl/ca.pem",
-                             cert_cert="aioetcd3/test/cfssl/client-root.pem",
-                             cert_key="aioetcd3/test/cfssl/client-root-key.pem")
+        self.root_client = ssl_client(endpoint=auth_etcd_url, ca_file="aioetcd3/test/cfssl/ca.pem",
+                                      cert_file="aioetcd3/test/cfssl/client-root.pem",
+                                      key_file="aioetcd3/test/cfssl/client-root-key.pem")
 
-        self.client_client = client(endpoints=auth_etcd_url, ca_cert="aioetcd3/test/cfssl/ca.pem",
-                               cert_cert="aioetcd3/test/cfssl/client.pem",
-                               cert_key="aioetcd3/test/cfssl/client-key.pem")
+        self.client_client = ssl_client(endpoint=auth_etcd_url, ca_file="aioetcd3/test/cfssl/ca.pem",
+                                        cert_file="aioetcd3/test/cfssl/client.pem",
+                                        key_file="aioetcd3/test/cfssl/client-key.pem")
 
         self.tearDown()
 

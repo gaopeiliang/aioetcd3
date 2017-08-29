@@ -18,7 +18,7 @@ def asynctest(f):
 class LeaseTest(unittest.TestCase):
     def setUp(self):
         endpoints = "127.0.0.1:2379"
-        self.client = client(endpoints=endpoints)
+        self.client = client(endpoint=endpoints)
 
         self.tearDown()
 

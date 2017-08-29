@@ -29,3 +29,22 @@ def put_key_range(obj, key_range):
         obj.range_end = to_bytes(range_end)
     return obj
 
+
+def ipv4_endpoints(server_list):
+    return 'ipv4:///' + ','.join(server_list)
+
+
+def ipv6_endpoints(server_list):
+    return 'ipv6:///' + ','.join(server_list)
+
+
+def dns_endpoint(dns_name):
+    return 'dns:///' + dns_name
+
+
+def get_secure_creds(ca_cert, cert_key, cert_cert):
+    with open(ca_cert, 'rb') as ca_cert_file:
+        with open(cert_key, 'rb') as cert_key_file:
+            with open(cert_cert, 'rb') as cert_cert_file:
+                return ca_cert_file.read(), cert_key_file.read(), cert_cert_file.read()
+

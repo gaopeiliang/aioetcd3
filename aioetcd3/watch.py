@@ -28,7 +28,7 @@ class Event(object):
     def __init__(self, event):
         self.type = event.type
 
-        if self.type == kv.Event.EventType.PUT and event.kv.Version == 1:
+        if self.type == kv.Event.PUT and event.kv.version == 1:
             self.type = 'created'
 
         self.key = event.kv.key
@@ -146,6 +146,6 @@ class Watch(StubMixin):
             cancel_request = rpc.WatchRequest(cancel_request=rpc.WatchCancelRequest(watch_id=watch_id))
             await self._input_queue.put((False, cancel_request, response_queue))
     
-    async def watch_scope(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
+    def watch_scope(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
         return WatchScope(self.watch(key_range, start_revision=start_revision,
                                      noput=noput, nodelete=nodelete, prev_kv=prev_kv))

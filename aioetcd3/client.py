@@ -1,4 +1,5 @@
 import grpc
+import os
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
 from aioetcd3.lease import Lease
@@ -37,6 +38,10 @@ class Client(KV, Lease, Auth):
             else:
                 if ca_cert is None:
                     ca_cert = ''
+
+            # to ensure ssl connect , set grpc env
+            os.environ['GRPC_SSL_CIPHER_SUITES'] = 'ECDHE-ECDSA-AES256-GCM-SHA384'
+
             credentials = grpc.ssl_channel_credentials(ca_cert, cert_key, cert_cert)
             channel = grpc.secure_channel(endpoint, credentials)
 

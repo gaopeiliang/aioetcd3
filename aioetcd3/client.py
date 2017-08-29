@@ -11,7 +11,7 @@ class Client(KV, Lease, Auth):
     def __init__(self, endpoint, ssl=False,
                  ca_cert=None, cert_key=None, cert_cert=None,
                  default_ca=False, timeout=None):
-        self.channel, self.credentials = self._create_grpc_channel(endpoints=endpoint, ssl=ssl,
+        self.channel, self.credentials = self._create_grpc_channel(endpoint=endpoint, ssl=ssl,
                                                                    ca_cert=ca_cert,
                                                                    cert_key=cert_key, cert_cert=cert_cert,
                                                                    default_ca=default_ca)

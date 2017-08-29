@@ -1,14 +1,13 @@
-import os
 import grpc
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
 from aioetcd3.lease import Lease
 from aioetcd3.auth import Auth
-from aioetcd3.watch import Watch
+# from aioetcd3.watch import Watch
 from aioetcd3.utils import get_secure_creds
 
 
-class Client(KV, Lease, Auth, Watch):
+class Client(KV, Lease, Auth):
     def __init__(self, endpoint, ssl=False,
                  ca_cert=None, cert_key=None, cert_cert=None,
                  default_ca=False, timeout=None):

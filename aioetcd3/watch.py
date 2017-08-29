@@ -41,6 +41,16 @@ class Event(object):
     def __str__(self):
         return f'{self.type} {self.key},{self.value}'
 
+        
+class WatchScope(object):
+    def __init__(self, _iter):
+        self._iter = _iter
+    async def __aenter__(self):
+        return self._iter
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._iter.aclose()
+
+
 class Watch(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
@@ -122,46 +132,20 @@ class Watch(StubMixin):
 
         response_queue = Queue()
         await self._input_queue.put((True, request, response_queue))
+        
+        try:
+            while True:
+                events, meta = await  response_queue.get()
+                if events is None:
+                    break
 
-        while True:
-            events, meta = await  response_queue.get()
-            if events is None:
-                break
-
-            for e in events:
-                yield (Event(e), meta)
-
-        # async def event_iter(queue):
-        #     while True:
-        #         event, meta = await queue.get()
-        #         if event is None and meta is None:
-        #             break
-        #         yield event
-        #
-        # await self._input_queue.put((watch_request, response_queue))
-        #
-        # return response_queue, event_iter(response_queue)
-
-    # async def unwatch(self, unique_queue):
-    #
-    #     max_time = 5
-    #     while True:
-    #         queue_info = [q for _, q in self._pending_created]
-    #         if unique_queue not in queue_info:
-    #             break
-    #         else:
-    #             max_time = max_time - 1
-    #             await asyncio.sleep(1)
-    #
-    #         if max_time <= 0:
-    #             raise ValueError("watch request mybe have no response")
-    #
-    #     if unique_queue not in self._watch_id:
-    #         raise ValueError("find watch id error")
-    #
-    #     watch_id = self._watch_id[unique_queue]
-    #
-    #     request = rpc.WatchCancelRequest(watch_id=watch_id)
-    #     response_queue = Queue()
-    #
-    #     await self._input_queue.put((request, response_queue))
+                for e in events:
+                    yield (Event(e), meta)
+        finally:
+            watch_id = self._watch_id[response_queue]
+            cancel_request = rpc.WatchRequest(cancel_request=rpc.WatchCancelRequest(watch_id=watch_id))
+            await self._input_queue.put((False, cancel_request, response_queue))
+    
+    async def watch_scope(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
+        return WatchScope(self.watch(key_range, start_revision=start_revision,
+                                     noput=noput, nodelete=nodelete, prev_kv=prev_kv))

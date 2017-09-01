@@ -8,6 +8,9 @@ from aioetcd3.utils import put_key_range
 from aioetcd3.kv import KVMetadata
 
 DEFAUTL_INPUT_QUEUE_LIMIT = 10000
+EVENT_TYPE_PUT = kv.Event.PUT
+EVENT_TYPE_DELETE = kv.Event.DELETE
+EVENT_TYPE_CREATE = kv.Event.DELETE + 1
 
 
 class WatchResponseMeta(object):
@@ -29,7 +32,7 @@ class Event(object):
         self.type = event.type
 
         if self.type == kv.Event.PUT and event.kv.version == 1:
-            self.type = 'created'
+            self.type = EVENT_TYPE_CREATE
 
         self.key = event.kv.key
         self.value = event.kv.value
@@ -55,8 +58,9 @@ class Watch(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
         self._watch_stub = rpc.WatchStub(channel)
+        self._loop = channel._loop
 
-        if hasattr(self, 'input_queue'):
+        if hasattr(self, '_input_queue'):
             # stream task mybe running , stop it first!
             stop = asyncio.ensure_future(self.stop_task())
             asyncio.wait(stop)
@@ -67,7 +71,9 @@ class Watch(StubMixin):
         self._watch_listening = {}
         self._watch_id = {}
 
-        self.stream_task = asyncio.ensure_future(self.stream_task(self.arequest()))
+        self._exit_future = self._loop.create_future()
+        self._input_request = self.arequest(self._exit_future)
+        self._back_stream_task = asyncio.ensure_future(self.stream_task(self._input_request))
 
     async def stream_task(self, request_iter):
         async with self._watch_stub.Watch.with_scope(request_iter) as response_iter:
@@ -77,6 +83,9 @@ class Watch(StubMixin):
                     request, out_queue = self._pending_created.pop(0)
                     self._watch_listening[response.watch_id] = (request, out_queue)
                     self._watch_id[out_queue] = response.watch_id
+
+                    # send out queue None event , indicate stream task has been created
+                    await out_queue.put((None, None))
 
                 if response.watch_id in self._watch_listening:
                     _, out_q = self._watch_listening[response.watch_id]
@@ -94,7 +103,7 @@ class Watch(StubMixin):
 
                         del self._watch_listening[response.watch_id]
 
-    async def arequest(self):
+    async def arequest(self, exit_future):
         if self._watch_listening:
             l = self._watch_listening
             self._watch_listening = {}
@@ -102,20 +111,25 @@ class Watch(StubMixin):
                 self._pending_created.append((request, out_queue))
                 yield request
 
-        while True:
-            is_created, request, out_queue = await self._input_queue.get()
-            if request is None and out_queue is None:
-                # stop iter request , stop watch stream
-                break
-            if is_created:
-                self._pending_created.append((request, out_queue))
+        try:
+            while True:
+                is_created, request, out_queue = await self._input_queue.get()
+                if request is None and out_queue is None:
+                    # stop iter request , stop watch stream
+                    break
+                if is_created:
+                    self._pending_created.append((request, out_queue))
 
-            yield request
+                yield request
+        finally:
+            exit_future.set_result(None)
 
     async def stop_task(self):
         await self._input_queue.put((None, None, None))
+        await self._exit_future
 
-    async def watch(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
+    async def watch(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False,
+                    create_event=False):
 
         filter = []
         if noput:
@@ -134,6 +148,10 @@ class Watch(StubMixin):
         await self._input_queue.put((True, request, response_queue))
         
         try:
+            await response_queue.get()
+            if create_event:
+                yield (None, None)
+
             while True:
                 events, meta = await  response_queue.get()
                 if events is None:

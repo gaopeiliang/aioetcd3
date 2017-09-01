@@ -79,6 +79,7 @@ class AuthTest(unittest.TestCase):
         await self.client.role_revoke_permission(name=TEST_ROLE_NAME,
                                                  key_range=range_all())
 
+    @unittest.SkipTest
     @asynctest
     async def test_auth_4(self):
         await self.root_client.user_add(username='root', password='root')
@@ -130,8 +131,12 @@ class AuthTest(unittest.TestCase):
     async def tearDown(self):
 
         await self.client.delete(range_all())
+        await self.client.stop_task()
 
         await self.root_client.auth_disable()
 
         await self.delete_all_user()
         await self.delete_all_role()
+
+        await self.client_client.stop_task()
+        await self.root_client.stop_task()

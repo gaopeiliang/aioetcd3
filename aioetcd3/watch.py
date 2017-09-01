@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from aioetcd3.base import StubMixin
 import aioetcd3.rpc.rpc_pb2 as rpc
@@ -49,6 +50,8 @@ class WatchScope(object):
     def __init__(self, _iter):
         self._iter = _iter
     async def __aenter__(self):
+        await self._iter.__anext__()
+        print("---- after scope anext ----")
         return self._iter
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._iter.aclose()
@@ -62,8 +65,7 @@ class Watch(StubMixin):
 
         if hasattr(self, '_input_queue'):
             # stream task mybe running , stop it first!
-            stop = asyncio.ensure_future(self.stop_task())
-            asyncio.wait(stop)
+            asyncio.ensure_future(self.stop_task())
 
         self._input_queue = Queue(maxsize=DEFAUTL_INPUT_QUEUE_LIMIT)
         # every request. unique Queue append here, correspond with response
@@ -71,12 +73,12 @@ class Watch(StubMixin):
         self._watch_listening = {}
         self._watch_id = {}
 
-        self._exit_future = self._loop.create_future()
-        self._input_request = self.arequest(self._exit_future)
-        self._back_stream_task = asyncio.ensure_future(self.stream_task(self._input_request))
+        # self._exit_future = self._loop.create_future()
+        self._input_request = self.arequest(self._input_queue)
+        self._back_stream_task = asyncio.ensure_future(self.stream_task(self._watch_stub, self._input_request))
 
-    async def stream_task(self, request_iter):
-        async with self._watch_stub.Watch.with_scope(request_iter) as response_iter:
+    async def stream_task(self, stub, request_iter):
+        async with stub.Watch.with_scope(request_iter) as response_iter:
 
             async for response in response_iter:
                 if response.created:
@@ -103,7 +105,7 @@ class Watch(StubMixin):
 
                         del self._watch_listening[response.watch_id]
 
-    async def arequest(self, exit_future):
+    async def arequest(self, input_queue):
         if self._watch_listening:
             l = self._watch_listening
             self._watch_listening = {}
@@ -111,31 +113,47 @@ class Watch(StubMixin):
                 self._pending_created.append((request, out_queue))
                 yield request
 
+        while True:
+            is_created, request, out_queue = await input_queue.get()
+            if request is None and out_queue is None:
+                # stop iter request , stop watch stream
+                break
+            if is_created:
+                self._pending_created.append((request, out_queue))
+
+            yield request
+
+    def stop_task(self):
+        if hasattr(self, '_last_stop_task'):
+            last_task = self._last_stop_task
+        else:
+            last_task = None
+        t = self._stop_task(self._input_queue, self._back_stream_task, last_task)
+        self._last_stop_task = t
+        return t
+
+    @staticmethod
+    async def _stop_task(input_queue, exit_future, last_task):
+        if last_task is not None:
+            try:
+                await last_task
+            except Exception:
+                pass
+        await input_queue.put((None, None, None))
+        exit_future.cancel()
         try:
-            while True:
-                is_created, request, out_queue = await self._input_queue.get()
-                if request is None and out_queue is None:
-                    # stop iter request , stop watch stream
-                    break
-                if is_created:
-                    self._pending_created.append((request, out_queue))
-
-                yield request
-        finally:
-            exit_future.set_result(None)
-
-    async def stop_task(self):
-        await self._input_queue.put((None, None, None))
-        await self._exit_future
+            await exit_future
+        except asyncio.CancelledError:
+            pass
 
     async def watch(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False,
                     create_event=False):
 
         filter = []
         if noput:
-            filter.append(rpc.WatchCreateRequest.FilterType.NOPUT)
+            filter.append(rpc.WatchCreateRequest.NOPUT)
         if nodelete:
-            filter.append(rpc.WatchCreateRequest.FilterType.NODELETE)
+            filter.append(rpc.WatchCreateRequest.NODELETE)
 
         watch_request = rpc.WatchCreateRequest(start_revision=start_revision,
                                                filters=filter,
@@ -166,4 +184,4 @@ class Watch(StubMixin):
     
     def watch_scope(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
         return WatchScope(self.watch(key_range, start_revision=start_revision,
-                                     noput=noput, nodelete=nodelete, prev_kv=prev_kv))
+                                     noput=noput, nodelete=nodelete, prev_kv=prev_kv, create_event=True))

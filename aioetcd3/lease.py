@@ -82,12 +82,12 @@ class Lease(StubMixin):
         lease_id = get_lease_id(lease)
         lease_request = rpc.LeaseKeepAliveRequest(ID=lease_id)
 
-        async def generate_request():
-            for request in [lease_request]:
-                yield request
+        async def generate_request(request):
+            for re in [request]:
+                yield re
 
         new_lease = None
-        async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request()) as result:
+        async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request(lease_request)) as result:
             async for r in result:
                 self._update_cluster_info(r.header)
                 new_lease = RLease(r.TTL, r.ID, self)

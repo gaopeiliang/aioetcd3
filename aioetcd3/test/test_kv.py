@@ -18,16 +18,16 @@ def asynctest(f):
 class KVTest(unittest.TestCase):
 
     def setUp(self):
-        endpoints = "127.0.0.1:2376"
+        endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
         endpoints = "127.0.0.1:2379"
         self.client.update_server_list(endpoints=endpoints)
-
         self.tearDown()
 
     @asynctest
     async def tearDown(self):
         await self.client.delete(key_range=range_all())
+        await self.client.stop_task()
 
     @asynctest
     async def test_put_get(self):
@@ -98,7 +98,6 @@ class KVTest(unittest.TestCase):
 
     @asynctest
     async def test_transaction(self):
-
         await self.client.put('/trans1', 'trans1')
         await self.client.put('/trans2', 'trans2')
 
@@ -133,12 +132,6 @@ class KVTest(unittest.TestCase):
         self.assertEqual(is_success, False)
         self.assertEqual(len(response), 1)
         self.assertEqual(len(response[0]), 0)
-
-
-
-
-
-
 
 if __name__ == '__main__':
     unittest.main()

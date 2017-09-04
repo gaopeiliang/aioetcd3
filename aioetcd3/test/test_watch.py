@@ -89,7 +89,7 @@ class WatchTest(unittest.TestCase):
             i = 0
             async for event, meta in self.client.watch('/foo', prev_kv=True, nodelete=True, create_event=True):
                 if event is None:
-                    f3.set_result(None)
+                    f4.set_result(None)
                     continue
 
                 i = i + 1
@@ -108,14 +108,15 @@ class WatchTest(unittest.TestCase):
             w1 = asyncio.ensure_future(watch_1())
             w2 = asyncio.ensure_future(watch_2())
             w3 = asyncio.ensure_future(watch_3())
+            w4 = asyncio.ensure_future(watch_4())
 
-            await asyncio.wait([f1, f2, f3])
+            await asyncio.wait([f1, f2, f3, f4])
 
             await self.client.put('/foo', 'foo')
             await self.client.put('/foo', 'foo1')
             await self.client.delete('/foo')
 
-            done, pending = await asyncio.wait([w1, w2, w3], timeout=20)
+            done, pending = await asyncio.wait([w1, w2, w3, w4], timeout=20)
             for t in done:
                 t.result()
         finally:

@@ -1,4 +1,4 @@
-from aioetcd3.rpc import rpc_pb2 as rpc
+from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3.utils import to_bytes, put_key_range
 from aioetcd3.base import StubMixin
 from inspect import getcallargs

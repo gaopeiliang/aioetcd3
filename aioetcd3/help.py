@@ -1,6 +1,6 @@
 from aioetcd3.utils import increment_last_byte, to_bytes
-from aioetcd3.rpc import auth_pb2 as auth
-from aioetcd3.rpc import rpc_pb2 as rpc
+from aioetcd3._etcdv3 import auth_pb2 as auth
+from aioetcd3._etcdv3 import rpc_pb2 as rpc
 
 SORT_ASCEND = 'ascend'
 SORT_DESCEND = 'descend'

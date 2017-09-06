@@ -1,8 +1,8 @@
 import asyncio
 
 from aioetcd3.base import StubMixin
-from aioetcd3.rpc import rpc_pb2 as rpc
-from aioetcd3.rpc import kv_pb2 as kv
+from aioetcd3._etcdv3 import rpc_pb2 as rpc
+from aioetcd3._etcdv3 import kv_pb2 as kv
 from asyncio.queues import Queue
 from aioetcd3.utils import put_key_range
 from aioetcd3.kv import KVMetadata

@@ -14,8 +14,8 @@ from google.protobuf import descriptor_pb2
 _sym_db = _symbol_database.Default()
 
 
-from aioetcd3.rpc import kv_pb2 as kv__pb2
-from aioetcd3.rpc import auth_pb2 as auth__pb2
+from aioetcd3._etcdv3 import kv_pb2 as kv__pb2
+from aioetcd3._etcdv3 import auth_pb2 as auth__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(

@@ -1,8 +1,8 @@
 import functools
 
 from aioetcd3.base import StubMixin
-from aioetcd3.rpc import rpc_pb2 as rpc
-from aioetcd3.rpc import auth_pb2 as auth
+from aioetcd3._etcdv3 import rpc_pb2 as rpc
+from aioetcd3._etcdv3 import auth_pb2 as auth
 from aioetcd3.utils import put_key_range
 
 

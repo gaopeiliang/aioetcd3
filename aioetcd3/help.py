@@ -1,20 +1,20 @@
 from aioetcd3.utils import increment_last_byte, to_bytes
-from aioetcd3._etcdv3 import auth_pb2 as auth
-from aioetcd3._etcdv3 import rpc_pb2 as rpc
+from aioetcd3._etcdv3 import auth_pb2 as _auth
+from aioetcd3._etcdv3 import rpc_pb2 as _rpc
 
 SORT_ASCEND = 'ascend'
 SORT_DESCEND = 'descend'
 
-PER_R = auth.Permission.READ
-PER_W = auth.Permission.WRITE
-PER_RW = auth.Permission.READWRITE
+PER_R = _auth.Permission.READ
+PER_W = _auth.Permission.WRITE
+PER_RW = _auth.Permission.READWRITE
 
-ALARM_ACTION_GET = rpc.AlarmRequest.GET
-ALARM_ACTION_ACTIVATE = rpc.AlarmRequest.ACTIVATE
-ALARM_ACTION_DEACTIVATE = rpc.AlarmRequest.DEACTIVATE
+ALARM_ACTION_GET = _rpc.AlarmRequest.GET
+ALARM_ACTION_ACTIVATE = _rpc.AlarmRequest.ACTIVATE
+ALARM_ACTION_DEACTIVATE = _rpc.AlarmRequest.DEACTIVATE
 
-ALARM_TYPE_NONE = rpc.NONE
-ALARM_TYPE_NOSPACE = rpc.NOSPACE
+ALARM_TYPE_NONE = _rpc.NONE
+ALARM_TYPE_NOSPACE = _rpc.NOSPACE
 
 
 def range_prefix(key):

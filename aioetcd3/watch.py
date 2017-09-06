@@ -51,7 +51,6 @@ class WatchScope(object):
         self._iter = _iter
     async def __aenter__(self):
         await self._iter.__anext__()
-        print("---- after scope anext ----")
         return self._iter
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._iter.aclose()
@@ -60,32 +59,42 @@ class WatchScope(object):
 class Watch(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._watch_stub = stub.WatchStub(channel)
         self._loop = channel._loop
 
-        if hasattr(self, '_input_queue'):
-            # stream task mybe running , stop it first!
-            asyncio.ensure_future(self.stop_task())
+        if hasattr(self, '_has_create_stream') and self._has_create_stream:
+            # this means stream api has created , recreated it
+            asyncio.ensure_future(self.stop_stream_task(self._back_stream_task))
+            self._has_create_stream = False
+            self.create_stream_task()
+
+        self._watch_stub = stub.WatchStub(channel)
 
         self._input_queue = Queue(maxsize=DEFAUTL_INPUT_QUEUE_LIMIT)
-        # every request. unique Queue append here, correspond with response
-        self._pending_created = []
+        self._pending_request_queue = Queue(maxsize=1)
         self._watch_listening = {}
         self._watch_id = {}
 
-        # self._exit_future = self._loop.create_future()
+    async def stop_stream_task(self, task):
+        task.cancel()
+
+    def create_stream_task(self):
+        self._input_queue = Queue()
         self._input_request = self.arequest(self._input_queue)
-        self._back_stream_task = asyncio.ensure_future(self.stream_task(self._watch_stub, self._input_request))
+
+        self._back_stream_task = asyncio.ensure_future(self.stream_task(self._watch_stub,
+                                                                        self._input_request))
+
+        self._has_create_stream = True
 
     async def stream_task(self, stub, request_iter):
         async with stub.Watch.with_scope(request_iter) as response_iter:
-
             async for response in response_iter:
                 if response.created:
-                    request, out_queue = self._pending_created.pop(0)
+                    request, out_queue, future = await self._pending_request_queue.get()
                     self._watch_listening[response.watch_id] = (request, out_queue)
                     self._watch_id[out_queue] = response.watch_id
 
+                    future.set_result(None)
                     # send out queue None event , indicate stream task has been created
                     await out_queue.put((None, None))
 
@@ -96,6 +105,7 @@ class Watch(StubMixin):
 
                 if response.canceled:
                     if response.watch_id in self._watch_listening:
+                        _, _, future = await self._pending_request_queue.get()
                         await self._watch_listening[response.watch_id][1].put((None, WatchResponseMeta(response)))
 
                         _, out_q = self._watch_listening[response.watch_id]
@@ -104,47 +114,18 @@ class Watch(StubMixin):
                             del self._watch_id[out_q]
 
                         del self._watch_listening[response.watch_id]
+                        future.set_result(None)
 
     async def arequest(self, input_queue):
-        if self._watch_listening:
-            l = self._watch_listening
-            self._watch_listening = {}
-            for request, out_queue in l.items():
-                self._pending_created.append((request, out_queue))
-                yield request
-
         while True:
-            is_created, request, out_queue = await input_queue.get()
+            request, out_queue, future = await input_queue.get()
             if request is None and out_queue is None:
                 # stop iter request , stop watch stream
                 break
-            if is_created:
-                self._pending_created.append((request, out_queue))
-
+            # self._pending_created.append((request, out_queue))
+            await self._pending_request_queue.put((request, out_queue, future))
             yield request
-
-    def stop_task(self):
-        if hasattr(self, '_last_stop_task'):
-            last_task = self._last_stop_task
-        else:
-            last_task = None
-        t = self._stop_task(self._input_queue, self._back_stream_task, last_task)
-        self._last_stop_task = t
-        return t
-
-    @staticmethod
-    async def _stop_task(input_queue, exit_future, last_task):
-        if last_task is not None:
-            try:
-                await last_task
-            except Exception:
-                pass
-        await input_queue.put((None, None, None))
-        exit_future.cancel()
-        try:
-            await exit_future
-        except asyncio.CancelledError:
-            pass
+            await future
 
     async def watch(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False,
                     create_event=False):
@@ -162,8 +143,14 @@ class Watch(StubMixin):
         put_key_range(watch_request, key_range)
         request = rpc.WatchRequest(create_request=watch_request)
 
+        if not hasattr(self, '_has_create_stream') and not self._has_create_stream:
+            # this means stream api has not start
+            self.create_stream_task()
+
+        done_future = self._loop.create_future()
         response_queue = Queue()
-        await self._input_queue.put((True, request, response_queue))
+        await self._input_queue.put((request, response_queue, done_future))
+        await done_future
         
         try:
             await response_queue.get()
@@ -180,8 +167,15 @@ class Watch(StubMixin):
         finally:
             watch_id = self._watch_id[response_queue]
             cancel_request = rpc.WatchRequest(cancel_request=rpc.WatchCancelRequest(watch_id=watch_id))
-            await self._input_queue.put((False, cancel_request, response_queue))
-    
+            done_future = self._loop.create_future()
+            await self._input_queue.put((cancel_request, response_queue, done_future))
+            await done_future
+
+            if not self._watch_id:
+                # this means has no stream request , stop stream api
+                self._has_create_stream = False
+                await self.stop_stream_task(self._back_stream_task)
+
     def watch_scope(self, key_range, start_revision=None, noput=False, nodelete=False, prev_kv=False):
         return WatchScope(self.watch(key_range, start_revision=start_revision,
                                      noput=noput, nodelete=nodelete, prev_kv=prev_kv, create_event=True))

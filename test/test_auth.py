@@ -21,7 +21,7 @@ class AuthTest(unittest.TestCase):
     def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
-        
+
         set_grpc_cipher()
         auth_etcd_url = "127.0.0.1:2378"
         self.root_client = ssl_client(endpoint=auth_etcd_url, ca_file="test/cfssl/ca.pem",
@@ -132,12 +132,9 @@ class AuthTest(unittest.TestCase):
     async def tearDown(self):
 
         await self.client.delete(range_all())
-        # await self.client.stop_task()
 
         await self.root_client.auth_disable()
 
         await self.delete_all_user()
         await self.delete_all_role()
 
-        # await self.client_client.stop_task()
-        # await self.root_client.stop_task()

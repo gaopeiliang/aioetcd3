@@ -105,23 +105,23 @@ class WatchTest(unittest.TestCase):
                     self.assertEqual(event.pre_value, b'foo')
                     break
 
-        try:
-            w1 = asyncio.ensure_future(watch_1())
-            w2 = asyncio.ensure_future(watch_2())
-            w3 = asyncio.ensure_future(watch_3())
-            w4 = asyncio.ensure_future(watch_4())
+        w1 = asyncio.ensure_future(watch_1())
+        w2 = asyncio.ensure_future(watch_2())
+        w3 = asyncio.ensure_future(watch_3())
+        w4 = asyncio.ensure_future(watch_4())
 
-            await asyncio.wait([f1, f2, f3, f4])
+        await asyncio.wait([f1, f2, f3, f4])
 
-            await self.client.put('/foo', 'foo')
-            await self.client.put('/foo', 'foo1')
-            await self.client.delete('/foo')
+        await self.client.put('/foo', 'foo')
+        await self.client.put('/foo', 'foo1')
+        await self.client.delete('/foo')
 
-            done, pending = await asyncio.wait([w1, w2, w3, w4], timeout=20)
-            for t in done:
-                t.result()
-        finally:
-            await self.client.stop_task()
+        done, pending = await asyncio.wait([w1, w2, w3, w4], timeout=20)
+        for t in done:
+            t.result()
+
+        # sleep to ensure future complete before loop stop
+        await asyncio.sleep(1)
 
     @asynctest
     async def tearDown(self):

@@ -4,6 +4,7 @@ from aioetcd3.base import StubMixin
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3._etcdv3 import auth_pb2 as auth
 from aioetcd3.utils import put_key_range
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
 def call_grpc(request, response_func, method):
@@ -22,7 +23,7 @@ def call_grpc(request, response_func, method):
 class Auth(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._auth_stub = rpc.AuthStub(channel)
+        self._auth_stub = stub.AuthStub(channel)
 
     @call_grpc(lambda: rpc.AuthEnableRequest(), lambda r: None, lambda s: s._auth_stub.AuthEnable)
     async def auth_enable(self):

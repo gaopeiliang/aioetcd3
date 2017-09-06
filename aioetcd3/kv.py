@@ -3,6 +3,7 @@ from aioetcd3.utils import to_bytes, put_key_range
 from aioetcd3.base import StubMixin
 from inspect import getcallargs
 import functools
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
 class KVMetadata(object):
@@ -184,7 +185,7 @@ def _compare_request(compare, success, fail):
 class KV(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._kv_stub = rpc.KVStub(channel)
+        self._kv_stub = stub.KVStub(channel)
 
     @_kv(_range_request, _static_builder(_range_response), lambda x: x._kv_stub.Range)
     async def range(self, key_range, limit=None, revision=None, timeout=None, sort_order=None, sort_target='key',

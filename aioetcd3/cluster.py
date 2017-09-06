@@ -2,6 +2,7 @@ import functools
 
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3.base import StubMixin
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
 def call_grpc(request, response_func, method):
@@ -20,7 +21,7 @@ def call_grpc(request, response_func, method):
 class Cluster(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._cluster_stub = rpc.ClusterStub(channel)
+        self._cluster_stub = stub.ClusterStub(channel)
 
     @call_grpc(lambda peerurls: rpc.MemberAddRequest(peerURLs=peerurls),
                lambda r: r.member, lambda s: s._cluster_stub.MemberAdd)

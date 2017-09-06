@@ -6,6 +6,7 @@ from aioetcd3._etcdv3 import kv_pb2 as kv
 from asyncio.queues import Queue
 from aioetcd3.utils import put_key_range
 from aioetcd3.kv import KVMetadata
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 DEFAUTL_INPUT_QUEUE_LIMIT = 10000
 EVENT_TYPE_PUT = kv.Event.PUT
@@ -59,7 +60,7 @@ class WatchScope(object):
 class Watch(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._watch_stub = rpc.WatchStub(channel)
+        self._watch_stub = stub.WatchStub(channel)
         self._loop = channel._loop
 
         if hasattr(self, '_input_queue'):

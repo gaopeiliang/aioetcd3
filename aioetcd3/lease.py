@@ -4,6 +4,7 @@ from aioetcd3.base import StubMixin
 import functools
 import inspect
 import asyncio
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
 def call_grpc(request, response_func, method):
@@ -62,7 +63,7 @@ class Lease(StubMixin):
 
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._lease_stub = rpc.LeaseStub(channel)
+        self._lease_stub = stub.LeaseStub(channel)
 
     @call_grpc(lambda ttl, id: rpc.LeaseGrantRequest(TTL=ttl, ID=id),
                lambda r, client: RLease(r.TTL, r.ID, client),

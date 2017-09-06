@@ -2,6 +2,7 @@ import functools
 
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3.base import StubMixin
+import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
 class Status(object):
@@ -29,7 +30,7 @@ def call_grpc(request, response_func, method):
 class Maintenance(StubMixin):
     def _update_channel(self, channel):
         super()._update_channel(channel)
-        self._maintenance_stub = rpc.MaintenanceStub(channel)
+        self._maintenance_stub = stub.MaintenanceStub(channel)
 
     @call_grpc(lambda: rpc.StatusRequest(), lambda r: Status(r),
                lambda s: s._maintenance_stub.Status)

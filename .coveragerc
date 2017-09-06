@@ -1,8 +1,7 @@
 [run]
 source = aioetcd3
-omit = aioetcd3/rpc/*
-       aioetcd3/test/*
-       
+omit = aioetcd3/_etcdv3/*
+
 [report]
 exclude_lines = 
         pragma: no cover

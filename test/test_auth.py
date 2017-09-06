@@ -23,13 +23,13 @@ class AuthTest(unittest.TestCase):
         self.client = client(endpoint=endpoints)
 
         auth_etcd_url = "127.0.0.1:2378"
-        self.root_client = ssl_client(endpoint=auth_etcd_url, ca_file="aioetcd3/test/cfssl/ca.pem",
-                                      cert_file="aioetcd3/test/cfssl/client-root.pem",
-                                      key_file="aioetcd3/test/cfssl/client-root-key.pem")
+        self.root_client = ssl_client(endpoint=auth_etcd_url, ca_file="test/cfssl/ca.pem",
+                                      cert_file="test/cfssl/client-root.pem",
+                                      key_file="test/cfssl/client-root-key.pem")
 
-        self.client_client = ssl_client(endpoint=auth_etcd_url, ca_file="aioetcd3/test/cfssl/ca.pem",
-                                        cert_file="aioetcd3/test/cfssl/client.pem",
-                                        key_file="aioetcd3/test/cfssl/client-key.pem")
+        self.client_client = ssl_client(endpoint=auth_etcd_url, ca_file="test/cfssl/ca.pem",
+                                        cert_file="test/cfssl/client.pem",
+                                        key_file="test/cfssl/client-key.pem")
 
         self.tearDown()
 

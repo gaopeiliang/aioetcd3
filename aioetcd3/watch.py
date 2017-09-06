@@ -61,7 +61,7 @@ class Watch(StubMixin):
         super()._update_channel(channel)
         self._loop = channel._loop
 
-        if hasattr(self, '_has_create_stream') and self._has_create_stream:
+        if hasattr(self, '_has_create_stream') or self._has_create_stream:
             # this means stream api has created , recreated it
             asyncio.ensure_future(self.stop_stream_task(self._back_stream_task))
             self._has_create_stream = False
@@ -143,7 +143,7 @@ class Watch(StubMixin):
         put_key_range(watch_request, key_range)
         request = rpc.WatchRequest(create_request=watch_request)
 
-        if not hasattr(self, '_has_create_stream') and not self._has_create_stream:
+        if not hasattr(self, '_has_create_stream') or not self._has_create_stream:
             # this means stream api has not start
             self.create_stream_task()
 

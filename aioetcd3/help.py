@@ -21,6 +21,23 @@ def range_prefix(key):
     return key, increment_last_byte(to_bytes(key))
 
 
+def range_prefix_without(prefix, with_out):
+    for key in with_out:
+        if not key.startswith(prefix):
+            raise ValueError(f"{key} not start with {prefix}")
+
+    sort_with_out = sorted(with_out)
+
+    re_range = []
+    next_start_key = to_bytes(prefix)
+    for key in sort_with_out:
+        re_range.append((to_bytes(next_start_key), to_bytes(key)))
+        next_start_key = increment_last_byte(to_bytes(key))
+
+    re_range.append(range_prefix(next_start_key))
+    return re_range
+
+
 def range_greater(key):
     return key, b'\0'
 

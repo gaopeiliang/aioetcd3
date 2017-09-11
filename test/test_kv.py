@@ -27,7 +27,7 @@ class KVTest(unittest.TestCase):
     @asynctest
     async def tearDown(self):
         await self.client.delete(key_range=range_all())
-        await self.client.stop_task()
+        # await self.client.stop_task()
 
     @asynctest
     async def test_put_get(self):

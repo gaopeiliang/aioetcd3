@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
-version = "1.0"
+version = "1.1"
 
 try:
     import pypandoc
@@ -31,9 +31,7 @@ setup(
     ],
     url="https://github.com/gaopeiliang/aioetcd3",
     platforms=['any'],
-    packages=[
-        'aioetcd3',
-    ],
+    packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
         'aiogrpc'

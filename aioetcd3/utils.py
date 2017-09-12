@@ -12,9 +12,17 @@ def to_bytes(maybe_bytestring):
 
 
 def increment_last_byte(byte_string):
-    s = bytearray(byte_string)
-    s[-1] = s[-1] + 1
-    return bytes(s)
+    s = bytearray(to_bytes(byte_string))
+    for i in range(len(s) - 1, -1, -1):
+        if s[i] < 0xff:
+            s[i] += 1
+            return bytes(s[:i+1])
+    else:
+        return b'\x00'
+
+
+def next_valid_key(byte_string):
+    return to_bytes(byte_string) + b'\x00'
 
 
 def put_key_range(obj, key_range):

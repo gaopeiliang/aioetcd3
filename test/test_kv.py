@@ -3,7 +3,7 @@ import asyncio
 import functools
 from aioetcd3.client import client
 from aioetcd3.kv import KV
-from aioetcd3.help import range_all, range_prefix, range_greater
+from aioetcd3.help import range_all, range_prefix, range_greater, range_greater_equal
 from aioetcd3 import transaction
 
 
@@ -76,7 +76,7 @@ class KVTest(unittest.TestCase):
         value_list = await self.client.range(key_range=range_prefix('/'), limit=11)
         self.assertEqual(len(value_list), 10)
 
-        value_list = await self.client.range(key_range=range_greater('/test8'))
+        value_list = await self.client.range(key_range=range_greater_equal('/test8'))
         self.assertEqual(len(value_list), 2)
         self.assertEqual(value_list[0][1], b'8')
         self.assertEqual(value_list[1][1], b'9')

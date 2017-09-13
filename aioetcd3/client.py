@@ -40,7 +40,7 @@ class Client(KV, Lease, Auth):
                     ca_cert = ''
 
             # to ensure ssl connect , set grpc env
-            os.environ['GRPC_SSL_CIPHER_SUITES'] = 'ECDHE-ECDSA-AES256-GCM-SHA384'
+            # os.environ['GRPC_SSL_CIPHER_SUITES'] = 'ECDHE-ECDSA-AES256-GCM-SHA384'
 
             credentials = grpc.ssl_channel_credentials(ca_cert, cert_key, cert_cert)
             channel = grpc.secure_channel(endpoint, credentials)
@@ -62,3 +62,34 @@ def ssl_client(endpoint, ca_file=None, cert_file=None, key_file=None, default_ca
     return Client(endpoint, ssl=True, ca_cert=ca, cert_key=key, cert_cert=cert,
                   default_ca=default_ca, timeout=timeout)
 
+
+def set_grpc_cipher(enable_rsa=True, enable_ecdsa=True, ciphers=None):
+    """
+    Set GRPC_SSL_CIPHER_SUITES environment variable to change the SSL cipher
+    used by GRPC. By default the GRPC C core only supports RSA.
+
+    :param enable_rsa:  Enable RSA cipher
+    :param enable_ecdsa: Enable ECDSA cipher
+    :param ciphers: Override the cipher list to a list of strings
+    """
+    if ciphers:
+        os.environ['GRPC_SSL_CIPHER_SUITES'] = ':'.join(ciphers)
+    else:
+        rsa_ciphers = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:' \
+                      'ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-GCM-SHA384'
+        ecdsa_ciphers = 'ECDHE-ECDSA-AES256-GCM-SHA384'
+        if enable_rsa:
+            if enable_ecdsa:
+                env = rsa_ciphers + ':' + ecdsa_ciphers
+            else:
+                env = rsa_ciphers
+        else:
+            if enable_ecdsa:
+                env = ecdsa_ciphers
+            else:
+                env = None
+        if env is None:
+            if 'GRPC_SSL_CIPHER_SUITES' in os.environ:
+                del os.environ['GRPC_SSL_CIPHER_SUITES']
+        else:
+            os.environ['GRPC_SSL_CIPHER_SUITES'] = env

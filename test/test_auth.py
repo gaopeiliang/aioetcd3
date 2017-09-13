@@ -2,7 +2,7 @@ import unittest
 import asyncio
 import functools
 
-from aioetcd3.client import client, ssl_client
+from aioetcd3.client import client, ssl_client, set_grpc_cipher
 from aioetcd3.help import range_all, PER_RW
 
 
@@ -21,7 +21,8 @@ class AuthTest(unittest.TestCase):
     def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
-
+        
+        set_grpc_cipher()
         auth_etcd_url = "127.0.0.1:2378"
         self.root_client = ssl_client(endpoint=auth_etcd_url, ca_file="test/cfssl/ca.pem",
                                       cert_file="test/cfssl/client-root.pem",

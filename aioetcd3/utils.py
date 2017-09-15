@@ -39,11 +39,26 @@ def put_key_range(obj, key_range):
 
 
 def ipv4_endpoints(server_list):
-    return 'ipv4:///' + ','.join(server_list)
+    return 'ipv4:///' + ','.join(
+                    s + ':2379' if ':' not in s else s
+                    for s in server_list
+            )
 
 
 def ipv6_endpoints(server_list):
-    return 'ipv6:///' + ','.join(server_list)
+
+    format_server_list = []
+    for ip_address in server_list:
+        if ip_address.startswith('['):
+            if ip_address.endswith(']'):
+                ip_address = ip_address + ':2379'
+        else:
+            if not ip_address.endswith(']'):
+                ip_address = '[' + ip_address + ']:2379'
+
+        format_server_list.append(ip_address)
+
+    return 'ipv6:///' + ','.join(format_server_list)
 
 
 def dns_endpoint(dns_name):

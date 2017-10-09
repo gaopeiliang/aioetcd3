@@ -179,13 +179,13 @@ class ServerCancelException(Exception):
 
 class Watch(StubMixin):
     def __init__(self, channel, timeout):
-        super().__init__(channel, timeout)
         # Put (WatchCreateRequest, output_queue, done_future) to create a watch
         self._create_request_queue = _Pipe(5, loop=self._loop)
         # Put (output_queue, done_future) to cancel a watch
         self._cancel_request_queue = _Pipe(loop=self._loop)
         self._reconnect_event = asyncio.Event(loop=self._loop)
         self._watch_task_running = None
+        super().__init__(channel, timeout)
     
     async def _watch_task(self, reconnect_event):
         # Queue for WatchRequest

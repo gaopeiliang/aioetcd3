@@ -12,6 +12,7 @@ EVENT_TYPE_MODIFY = "MODIFY"
 EVENT_TYPE_DELETE = "DELETE"
 EVENT_TYPE_CREATE = "CREATE"
 
+
 class WatchResponseMeta(object):
     def __init__(self, response):
         self.watch_id = response.watch_id
@@ -125,7 +126,7 @@ class _Pipe(object):
             read_size = min(len(self._queue), limit)
         result = self._queue[:read_size]
         del self._queue[:read_size]
-        if self._maxsize or len(self._queue) < self._maxsize:
+        if not self._maxsize or len(self._queue) < self._maxsize:
             self._full_notify.set()
         if len(self._queue) == 0:
             self._notify.clear()
@@ -334,7 +335,7 @@ class Watch(StubMixin):
                                                 pending_create_request[3].done():
                                             pending_create_request[3].set_result(True)
                                     else:
-                                        registered_watches[response.watch_id] = pending_create_request[0:1]
+                                        registered_watches[response.watch_id] = pending_create_request[0:2]
                                         registered_queues[pending_create_request[1]] = response.watch_id
                                         if pending_create_request[2] is not None and not \
                                                 pending_create_request[2].done():
@@ -379,7 +380,7 @@ class Watch(StubMixin):
                                     if response.watch_id in pending_cancel_requests:
                                         pending_cancel_requests[response.watch_id].set_result(True)
                         if self._create_request_queue in pipes:
-                            while pending_create_request is not None and not self._create_request_queue.is_empty():
+                            while pending_create_request is None and not self._create_request_queue.is_empty():
                                 create_req, output_queue, done_fut = self._create_request_queue.get_nowait()
                                 if done_fut.cancelled():
                                     # Ignore cancelled create requests

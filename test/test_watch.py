@@ -28,7 +28,7 @@ class WatchTest(unittest.TestCase):
             i = 0
             async with self.client.watch_scope('/foo') as response:
                 f1.set_result(None)
-                async for event, meta in response:
+                async for event in response:
                     i = i + 1
                     if i == 1:
                         self.assertEqual(event.type, EVENT_TYPE_CREATE)
@@ -48,7 +48,7 @@ class WatchTest(unittest.TestCase):
         f2 = asyncio.get_event_loop().create_future()
         async def watch_2():
             i = 0
-            async for event, meta in self.client.watch('/foo', prev_kv=True, create_event=True):
+            async for event in self.client.watch('/foo', prev_kv=True, create_event=True):
                 if event is None:
                     f2.set_result(None)
                     continue
@@ -72,7 +72,7 @@ class WatchTest(unittest.TestCase):
         f3 = asyncio.get_event_loop().create_future()
         async def watch_3():
             i = 0
-            async for event, meta in self.client.watch('/foo', prev_kv=True, noput=True, create_event=True):
+            async for event in self.client.watch('/foo', prev_kv=True, noput=True, create_event=True):
                 if event is None:
                     f3.set_result(None)
                     continue
@@ -87,7 +87,7 @@ class WatchTest(unittest.TestCase):
         f4 = asyncio.get_event_loop().create_future()
         async def watch_4():
             i = 0
-            async for event, meta in self.client.watch('/foo', prev_kv=True, nodelete=True, create_event=True):
+            async for event in self.client.watch('/foo', prev_kv=True, nodelete=True, create_event=True):
                 if event is None:
                     f4.set_result(None)
                     continue
@@ -119,9 +119,11 @@ class WatchTest(unittest.TestCase):
         for t in done:
             t.result()
 
-        # sleep to ensure future complete before loop stop
-        await asyncio.sleep(1)
 
     @asynctest
     async def tearDown(self):
         await self.client.delete(range_all())
+
+
+if __name__ == '__main__':
+    unittest.main()

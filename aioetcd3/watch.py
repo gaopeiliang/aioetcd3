@@ -318,8 +318,8 @@ class Watch(StubMixin):
                                                 )
                                         pending_cancel_requests[watch_id] = done_fut
                         # Process received events
-                        if output_queue in pipes:
-                            outputs = output_queue.read_nowait()
+                        if output_pipe in pipes:
+                            outputs = output_pipe.read_nowait()
                             for response in outputs:
                                 if response.created:
                                     assert pending_create_request is not None

@@ -4,7 +4,7 @@ import asyncio
 
 from aioetcd3.client import client
 from aioetcd3.help import range_all
-from aioetcd3.watch import EVENT_TYPE_CREATE,EVENT_TYPE_DELETE,EVENT_TYPE_PUT
+from aioetcd3.watch import EVENT_TYPE_CREATE,EVENT_TYPE_DELETE,EVENT_TYPE_MODIFY
 
 
 def asynctest(f):
@@ -35,7 +35,7 @@ class WatchTest(unittest.TestCase):
                         self.assertEqual(event.key, b'/foo')
                         self.assertEqual(event.value, b'foo')
                     elif i == 2:
-                        self.assertEqual(event.type, EVENT_TYPE_PUT)
+                        self.assertEqual(event.type, EVENT_TYPE_MODIFY)
                         self.assertEqual(event.key, b'/foo')
                         self.assertEqual(event.value, b'foo1')
                     elif i == 3:
@@ -59,7 +59,7 @@ class WatchTest(unittest.TestCase):
                     self.assertEqual(event.key, b'/foo')
                     self.assertEqual(event.value, b'foo')
                 elif i == 2:
-                    self.assertEqual(event.type, EVENT_TYPE_PUT)
+                    self.assertEqual(event.type, EVENT_TYPE_MODIFY)
                     self.assertEqual(event.key, b'/foo')
                     self.assertEqual(event.value, b'foo1')
                     self.assertEqual(event.pre_value, b'foo')
@@ -98,7 +98,7 @@ class WatchTest(unittest.TestCase):
                     self.assertEqual(event.key, b'/foo')
                     self.assertEqual(event.value, b'foo')
                 elif i == 2:
-                    self.assertEqual(event.type, EVENT_TYPE_PUT)
+                    self.assertEqual(event.type, EVENT_TYPE_MODIFY)
                     self.assertEqual(event.key, b'/foo')
                     self.assertEqual(event.value, b'foo1')
                     self.assertEqual(event.pre_value, b'foo')

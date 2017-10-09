@@ -21,7 +21,7 @@ class KVTest(unittest.TestCase):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
         endpoints = "127.0.0.1:2379"
-        self.client.update_server_list(endpoints=endpoints)
+        self.client.update_server_list(endpoint=endpoints)
         self.tearDown()
 
     @asynctest

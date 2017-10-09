@@ -6,7 +6,7 @@ class StubMixin(object):
         self._update_channel(channel)
 
     def _update_channel(self, channel):
-        pass
+        self._loop = channel._loop
 
     def _update_cluster_info(self, header):
         self.last_response_info = header

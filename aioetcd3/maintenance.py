@@ -18,8 +18,8 @@ def call_grpc(request, response_func, method):
 
     def _f(f):
         @functools.wraps(f)
-        async def call(self, *args, timeout=None, **kwargs):
-            r = await self.grpc_call(method(self), request(*args, **kwargs), timeout=timeout)
+        async def call(self, *args, **kwargs):
+            r = await self.grpc_call(method(self), request(*args, **kwargs))
             return response_func(r)
 
         return call

@@ -87,4 +87,3 @@ class LeaseTest(unittest.TestCase):
     @asynctest
     async def tearDown(self):
         await self.client.delete(range_all())
-        # await self.client.stop_task()

@@ -1,38 +1,38 @@
-import grpc
+import aiogrpc
 import os
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
 from aioetcd3.lease import Lease
 from aioetcd3.auth import Auth
-# from aioetcd3.watch import Watch
+from aioetcd3.watch import Watch
 from aioetcd3.utils import get_secure_creds
 
 
-class Client(KV, Lease, Auth):
+class Client(KV, Lease, Auth, Watch):
     def __init__(self, endpoint, ssl=False,
                  ca_cert=None, cert_key=None, cert_cert=None,
-                 default_ca=False, grpc_options = None, timeout=None):
-        self.channel, self.credentials = self._create_grpc_channel(endpoint=endpoint, ssl=ssl,
-                                                                   ca_cert=ca_cert,
-                                                                   cert_key=cert_key, cert_cert=cert_cert,
-                                                                   default_ca=default_ca,
-                                                                   options=grpc_options)
-        self.timeout = timeout
-        super().__init__(self.channel, self.timeout)
+                 default_ca=False, grpc_options = None, timeout=5,
+                 *, loop=None, executor=None):
+        channel = self._create_grpc_channel(endpoint=endpoint, ssl=ssl,
+                                            ca_cert=ca_cert,
+                                            cert_key=cert_key, cert_cert=cert_cert,
+                                            default_ca=default_ca,
+                                            options=grpc_options,
+                                            loop=loop,
+                                            executor=executor)
+        super().__init__(channel, timeout)
 
-    def update_server_list(self, endpoints):
-
-        if self.credentials:
-            self.channel = Channel(grpc.secure_channel(endpoints, self.credentials))
-        else:
-            self.channel = Channel(grpc.insecure_channel(endpoints))
-        self._update_channel(self.channel)
+    def update_server_list(self, endpoint):
+        channel = self._recreate_grpc_channel(endpoint)
+        self._update_channel(channel)
 
     def _create_grpc_channel(self, endpoint, ssl=False,
-                             ca_cert=None, cert_key=None, cert_cert=None, default_ca=False, options=None):
+                             ca_cert=None, cert_key=None, cert_cert=None, default_ca=False, options=None,
+                             *, loop=None, executor=None):
         credentials = None
         if not ssl:
-            channel = grpc.insecure_channel(endpoint, options=options)
+            channel = aiogrpc.insecure_channel(endpoint, options=options, loop=loop, executor=executor,
+                                               standalone_pool_for_streaming=True)
         else:
             if default_ca:
                 ca_cert = None
@@ -43,13 +43,27 @@ class Client(KV, Lease, Auth):
             # to ensure ssl connect , set grpc env
             # os.environ['GRPC_SSL_CIPHER_SUITES'] = 'ECDHE-ECDSA-AES256-GCM-SHA384'
 
-            credentials = grpc.ssl_channel_credentials(ca_cert, cert_key, cert_cert)
-            channel = grpc.secure_channel(endpoint, credentials, options=options)
+            credentials = aiogrpc.ssl_channel_credentials(ca_cert, cert_key, cert_cert)
+            channel = aiogrpc.secure_channel(endpoint, credentials, options=options,
+                                             loop=loop, executor=executor,
+                                             standalone_pool_for_streaming=True)
 
-        # use aiogrpc to decorate channel
-        channel = Channel(channel)
+        # Save parameters for auto-recreate
+        self._credentials = credentials
+        self._options = options
+        self._loop = channel._loop
+        self._executor = executor
+        return channel
 
-        return channel, credentials
+    def _recreate_grpc_channel(self, endpoint):
+        if self._credentials:
+            channel = aiogrpc.secure_channel(endpoint, self._credentials, options=self._options,
+                                             loop=self._loop, executor=self._executor,
+                                             standalone_pool_for_streaming=True)
+        else:
+            channel = aiogrpc.insecure_channel(endpoint, options=self._options, loop=self._loop,
+                                               executor=self._executor, standalone_pool_for_streaming=True)
+        return channel
 
 
 def client(endpoint, grpc_options=None, timeout=None):

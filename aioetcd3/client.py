@@ -11,7 +11,7 @@ from aioetcd3.utils import get_secure_creds
 class Client(KV, Lease, Auth, Watch):
     def __init__(self, endpoint, ssl=False,
                  ca_cert=None, cert_key=None, cert_cert=None,
-                 default_ca=False, grpc_options = None, timeout=None,
+                 default_ca=False, grpc_options = None, timeout=5,
                  *, loop=None, executor=None):
         channel = self._create_grpc_channel(endpoint=endpoint, ssl=ssl,
                                             ca_cert=ca_cert,
@@ -56,8 +56,8 @@ class Client(KV, Lease, Auth, Watch):
         return channel
 
     def _recreate_grpc_channel(self, endpoint):
-        if self.credentials:
-            channel = aiogrpc.secure_channel(endpoint, self.credentials, options=self._options,
+        if self._credentials:
+            channel = aiogrpc.secure_channel(endpoint, self._credentials, options=self._options,
                                              loop=self._loop, executor=self._executor,
                                              standalone_pool_for_streaming=True)
         else:

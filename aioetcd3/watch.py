@@ -13,20 +13,6 @@ EVENT_TYPE_DELETE = "DELETE"
 EVENT_TYPE_CREATE = "CREATE"
 
 
-class WatchResponseMeta(object):
-    def __init__(self, response):
-        self.watch_id = response.watch_id
-        self.created = response.created
-        self.canceled = response.canceled
-        self.compact_revision = response.compact_revision
-        self.cancel_reason = response.cancel_reason
-
-    def __str__(self):
-        return str({"watch_id": self.watch_id, "created": self.created,
-                    "canceled": self.canceled, "compact_revision": self.compact_revision,
-                    "cancel_reason": self.cancel_reason})
-
-
 class Event(object):
     def __init__(self, event, revision):
         if event.type == kv.Event.PUT:
@@ -62,7 +48,10 @@ class WatchScope(object):
         return self._iter
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self._iter.aclose()
+        try:
+            await self._iter.aclose()
+        except GeneratorExit:
+            pass
 
 
 class _Pipe(object):
@@ -161,8 +150,15 @@ class _Pipe(object):
 
 async def _select(pipes, futures, *, loop=None):
     futures = [asyncio.ensure_future(f, loop=loop) for f in futures]
-    _, _ = await asyncio.wait([p.wait_empty() for p in pipes] + list(futures),
+    _, pending = await asyncio.wait([p.wait_empty() for p in pipes] + list(futures),
                         loop=loop, return_when=asyncio.FIRST_COMPLETED)
+    for p in pending:
+        if p not in futures:
+            p.cancel()
+            try:
+                await p
+            except Exception:
+                pass
     return [p for p in pipes if not p.is_empty()], [f for f in futures if f.done()]
 
 
@@ -200,7 +196,7 @@ class Watch(StubMixin):
             async with watch_stub.Watch.with_scope(input_iterator(input_queue)) as response_iter:
                 async for r in response_iter:
                     await output_pipe.put(r)
-        last_event_revision = None
+        last_received_revision = None
         # watch_id -> revision
         last_watches_revision = {}
         # watch_id -> (WatchCreateRequest, output_queue)
@@ -215,13 +211,14 @@ class Watch(StubMixin):
         restore_creates = {}
         quitting = False
         def _reconnect_revision(watch_id):
-            if last_event_revision is None:
+            if last_received_revision is None:
                 return None
             else:
-                if watch_id in last_watches_revision and last_watches_revision[watch_id] == last_event_revision:
-                    return last_event_revision + 1
+                if watch_id in last_watches_revision:
+                    last_revision = last_watches_revision[watch_id]
+                    return max(last_revision + 1, last_received_revision)
                 else:
-                    return last_event_revision
+                    return None
         try:
             while not quitting:         # Auto reconnect when failed or channel updated
                 reconnect_event.clear()
@@ -236,6 +233,7 @@ class Watch(StubMixin):
                             fut = pending_cancel_requests.pop(watch_id)
                             if not fut.done():
                                 fut.set_result(True)
+                            continue
                         r = rpc.WatchCreateRequest()
                         r.CopyFrom(create_request)
                         restore_revision = _reconnect_revision(watch_id)
@@ -251,6 +249,7 @@ class Watch(StubMixin):
                     # Restore pending create request
                     if pending_create_request is not None:
                         if pending_create_request[3] is not None:     # Cancelled
+                            pending_create_request[1].put_nowait((False, None, None))
                             if pending_create_request[2] is not None and not pending_create_request[2].done():
                                 pending_create_request[2].set_result(True)
                             if pending_create_request[3] is not None and not pending_create_request[3].done():
@@ -269,13 +268,15 @@ class Watch(StubMixin):
                             select_pipes = [output_pipe, self._create_request_queue, self._cancel_request_queue]
                         else:
                             select_pipes = [output_pipe, self._cancel_request_queue]
-                        select_futs = [reconnect_event.wait(), call_task]
+                        reconn_wait = asyncio.ensure_future(reconnect_event.wait(), loop=self._loop)
+                        select_futs = [reconn_wait, call_task]
                         if not pending_create_request and not registered_watches and \
                                 not restore_creates:
                             select_futs.append(asyncio.sleep(2, loop=self._loop))
                         pipes, _ = await _select(select_pipes,
                                                     select_futs,
                                                     loop=self._loop)
+                        reconn_wait.cancel()
                         if not pipes and not reconnect_event.is_set() and not call_task.done():
                             # No watch, stop the task
                             quitting = True
@@ -301,7 +302,7 @@ class Watch(StubMixin):
                                         pending_create_request[1] == output_queue:
                                     # Cancel the pending create watch
                                     if pending_create_request[3] is None:
-                                        pending_create_request = pending_create_request[:2] + (done_fut,)
+                                        pending_create_request = pending_create_request[:3] + (done_fut,)
                                     else:
                                         pending_create_request[3].add_done_callback(
                                             lambda f, done_fut=done_fut: done_fut.set_result(True))
@@ -345,19 +346,19 @@ class Watch(StubMixin):
                                             input_queue.put_nowait(
                                                     rpc.WatchRequest(
                                                         cancel_request=
-                                                            rpc.WatchCancelRequest(watch_id=watch_id)
+                                                            rpc.WatchCancelRequest(watch_id=response.watch_id)
                                                         )
                                                     )
-                                            pending_cancel_requests[watch_id] = pending_create_request[3]
+                                            pending_cancel_requests[response.watch_id] = pending_create_request[3]
                                     pending_create_request = None
                                 if response.events:
-                                    last_event_revision = response.header.revision
-                                    last_watches_revision[response.watch_id] = last_event_revision
+                                    last_received_revision = response.header.revision
+                                    last_watches_revision[response.watch_id] = last_received_revision
                                     if response.watch_id in registered_watches:
                                         _, output_queue = registered_watches[response.watch_id]
                                         output_queue.put_nowait((True,
-                                                                 [Event(e, last_event_revision) for e in response.events],
-                                                                 last_event_revision))
+                                                                 [Event(e, last_received_revision) for e in response.events],
+                                                                 last_received_revision))
                                 if response.compact_revision > 0:
                                     if response.watch_id in registered_watches:
                                         _, output_queue = registered_watches.pop(response.watch_id)
@@ -367,6 +368,7 @@ class Watch(StubMixin):
                                     if response.watch_id in pending_cancel_requests:
                                         if not pending_cancel_requests[response.watch_id].done():
                                             pending_cancel_requests[response.watch_id].set_result(True)
+                                        del pending_cancel_requests[response.watch_id]
                                 if response.canceled:
                                     # Cancel response
                                     if response.watch_id in registered_watches:
@@ -378,11 +380,13 @@ class Watch(StubMixin):
                                             output_queue.put_nowait((False, ServerCancelException(response.cancel_reason), _reconnect_revision(response.watch_id)))
                                         del registered_queues[output_queue]
                                     if response.watch_id in pending_cancel_requests:
-                                        pending_cancel_requests[response.watch_id].set_result(True)
+                                        if not pending_cancel_requests[response.watch_id].done():
+                                            pending_cancel_requests[response.watch_id].set_result(True)
+                                        del pending_cancel_requests[response.watch_id]
                         if self._create_request_queue in pipes:
                             while pending_create_request is None and not self._create_request_queue.is_empty():
                                 create_req, output_queue, done_fut = self._create_request_queue.get_nowait()
-                                if done_fut.cancelled():
+                                if done_fut.done():
                                     # Ignore cancelled create requests
                                     output_queue.put_nowait((False, None, None))
                                     continue
@@ -422,6 +426,11 @@ class Watch(StubMixin):
                 for _, fut in pending_cancel_requests.items():
                     if not fut.done():
                         fut.set_result(True)
+            if restore_creates:
+                for q, (_, fut) in restore_creates.items():
+                    if fut is not None and not fut.done():
+                        fut.set_result(exc)
+                    q.put_nowait((False, exc, _reconnect_revision(watch_id)))
             if not self._create_request_queue.is_empty():
                 create_requests = self._create_request_queue.read_nowait()
                 for r in create_requests:
@@ -433,7 +442,7 @@ class Watch(StubMixin):
                 for _, fut in cancel_requests:
                     if fut is not None and not fut.done():
                         fut.set_result(True)
-            raise
+            #raise
         finally:
             self._watch_task_running = None
     

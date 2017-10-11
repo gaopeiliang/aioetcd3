@@ -1,6 +1,6 @@
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3.utils import to_bytes, put_key_range
-from aioetcd3.base import StubMixin
+from aioetcd3.base import StubMixin, _default_timeout
 from inspect import getcallargs
 import functools
 import aioetcd3._etcdv3.rpc_pb2_grpc as stub
@@ -38,13 +38,13 @@ def _get_grpc_args(func, *args, **kwargs):
 
 def _kv(request_builder, response_builder, method):
     def _decorator(f):
-        def txn(*args, timeout=None, **kwargs):
+        def txn(*args, timeout=_default_timeout, **kwargs):
             call_args = _get_grpc_args(f, *args, **kwargs)
             return (request_builder(**call_args), response_builder(**call_args))
         f.txn = txn
 
         @functools.wraps(f)
-        async def grpc_func(self, *args, timeout=None, **kwargs):
+        async def grpc_func(self, *args, timeout=_default_timeout, **kwargs):
             request, response = txn(*args, **kwargs)
             return response(await self.grpc_call(method(self), request, timeout=timeout))
         return grpc_func
@@ -188,7 +188,7 @@ class KV(StubMixin):
         self._kv_stub = stub.KVStub(channel)
 
     @_kv(_range_request, _static_builder(_range_response), lambda x: x._kv_stub.Range)
-    async def range(self, key_range, limit=None, revision=None, timeout=None, sort_order=None, sort_target='key',
+    async def range(self, key_range, limit=None, revision=None, timeout=_default_timeout, sort_order=None, sort_target='key',
                     serializable=None, keys_only=None, count_only=None, min_mod_revision=None, max_mod_revision=None,
                     min_create_revision=None, max_create_revision=None):
         # implemented in decorator
@@ -196,38 +196,54 @@ class KV(StubMixin):
 
     @_kv(functools.partial(_range_request, count_only=True),
          _static_builder(lambda r: r.count), lambda x: x._kv_stub.Range)
-    async def count(self, key_range, revision=None, timeout=None, min_mod_revision=None,
+    async def count(self, key_range, revision=None, timeout=_default_timeout, min_mod_revision=None,
                     max_mod_revision=None, min_create_revision=None, max_create_revision=None):
         pass
 
     @_kv(functools.partial(_range_request, keys_only=True), _static_builder(_range_keys_response),
          lambda x: x._kv_stub.Range)
     async def range_keys(self, key_range, limit=None, revison=None, sort_order=None,
-                         sort_target='key', timeout=None, serializable=None, count_only=None,
+                         sort_target='key', timeout=_default_timeout, serializable=None, count_only=None,
                          min_mod_revision=None, max_mod_revision=None, min_create_revision=None,
                          max_create_revision=None):
         pass
 
     @_kv(_range_request, _static_builder(_get_response), lambda x: x._kv_stub.Range)
-    async def get(self, key_range, revision=None, timeout=None, serializable=None,
+    async def get(self, key_range, revision=None, timeout=_default_timeout, serializable=None,
                   min_mod_revision=None, max_mod_revision=None, min_create_revision=None,
                   max_create_revision=None):
         pass
 
     @_kv(_put_request, _partial_builder(_put_response), lambda x: x._kv_stub.Put)
-    async def put(self, key, value, lease=0, prev_kv=False, timeout=None, ignore_value=False, ignore_lease=False):
+    async def put(self, key, value, lease=0, prev_kv=False, timeout=_default_timeout, ignore_value=False, ignore_lease=False):
         pass
 
     @_kv(_delete_request, _partial_builder(_delete_response), lambda x: x._kv_stub.DeleteRange)
-    async def delete(self, key_range, timeout=None, prev_kv=False):
+    async def delete(self, key_range, timeout=_default_timeout, prev_kv=False):
         pass
 
     @_kv(functools.partial(_delete_request, prev_kv=True),
          _partial_builder(functools.partial(_delete_response, prev_kv=True)),
          lambda x: x._kv_stub.DeleteRange)
-    async def pop(self, key_range, timeout=None):
+    async def pop(self, key_range, timeout=_default_timeout):
         pass
 
     @_kv(_compare_request, _create_txn_response_builder, lambda x: x._kv_stub.Txn)
-    async def txn(self, compare, success, fail=[], *, timeout=None):
+    async def txn(self, compare, success, fail=[], *, timeout=_default_timeout):
         pass
+
+    async def compact(self, revision, physical=False, *, timeout=_default_timeout):
+        """
+        Compact etcd KV storage
+        
+        :param revision: compact to specified revision
+        
+        :param physical: return until data is physically compacted
+        
+        :param timeout: maximum time to wait
+        """
+        await self.grpc_call(self._kv_stub.Compact,
+                               rpc.CompactionRequest(revision=revision,
+                                                    physical=physical),
+                               timeout=timeout)
+        

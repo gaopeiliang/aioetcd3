@@ -43,6 +43,9 @@ class BaseCompare(object):
 
         self.build_compare(compare)
         return compare
+    
+    def build_compare(self, compare):
+        raise NotImplementedError
 
 
 class Value(BaseCompare):

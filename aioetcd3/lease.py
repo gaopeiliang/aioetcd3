@@ -11,10 +11,10 @@ def call_grpc(request, response_func, method):
 
     def _f(f):
         @functools.wraps(f)
-        async def call(self, *args, timeout=None, **kwargs):
+        async def call(self, *args, **kwargs):
             params = inspect.getcallargs(f, self, *args, **kwargs)
             params.pop('self')
-            r = await self.grpc_call(method(self), request(**params), timeout=timeout)
+            r = await self.grpc_call(method(self), request(**params))
             return response_func(r, client=self)
 
         return call

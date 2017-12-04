@@ -1,8 +1,12 @@
 import functools
+import aiogrpc
+import grpc
 
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3.base import StubMixin
 import aioetcd3._etcdv3.rpc_pb2_grpc as stub
+from aioetcd3.utils import ipv4_endpoints
+from aioetcd3.maintenance import Maintenance
 
 
 def call_grpc(request, response_func, method):
@@ -44,3 +48,36 @@ class Cluster(StubMixin):
                lambda s: s._cluster_stub.MemberList)
     async def member_list(self):
         pass
+
+    async def member_healthy(self, members=None):
+
+        if not members:
+            members = await self.member_list()
+            members = [m.clientURLs for m in members]
+
+        health_members = []
+        unhealth_members = []
+        for m in members:
+
+            m = [u.rpartition("//")[2] for u in m]
+            server_endpoint = ipv4_endpoints(m)
+
+            if self._credentials:
+                channel = aiogrpc.secure_channel(server_endpoint, self._credentials, options=self._options,
+                                                 loop=self._loop, executor=self._executor,
+                                                 standalone_pool_for_streaming=True)
+            else:
+                channel = aiogrpc.insecure_channel(server_endpoint, options=self._options, loop=self._loop,
+                                                   executor=self._executor, standalone_pool_for_streaming=True)
+
+            maintenance = Maintenance(channel=channel, timeout=2)
+            try:
+                await maintenance.status()
+            except grpc.RpcError:
+                unhealth_members.append(m)
+            else:
+                health_members.append(m)
+
+        return health_members, unhealth_members
+
+

@@ -162,16 +162,26 @@ async def _select(pipes, futures, *, loop=None):
     return [p for p in pipes if not p.is_empty()], [f for f in futures if f.done()]
 
 
-class CompactRevisonException(Exception):
+class WatchException(Exception):
+    def _clone(self):
+        return type(self)(*self.args)
+
+class CompactRevisonException(WatchException):
     def __init__(self, revision):
         super().__init__(f"Watch on compact revision. Min revision is {revision}")
         self.revision = revision
+    
+    def _clone(self):
+        return CompactRevisonException(self.revision)
 
 
-class ServerCancelException(Exception):
+class ServerCancelException(WatchException):
     def __init__(self, cancel_reason):
         super().__init__(f"Watch cancelled: {cancel_reason}")
         self.cancel_reason = cancel_reason
+    
+    def _clone(self):
+        return ServerCancelException(self.cancel_reason)
 
 
 class Watch(StubMixin):
@@ -489,7 +499,13 @@ class Watch(StubMixin):
                             if result is None:
                                 break
                             else:
-                                raise result
+                                # When an exception is raised in multiple positions
+                                # the traceback will mix up, so clone the exception
+                                # for each raise
+                                if isinstance(result, WatchException):
+                                    raise result._clone() from result
+                                else:
+                                    raise WatchException("Watch failed with server exception") from result
                         else:
                             reconnect_revision = revision + 1
                             if batch_events:

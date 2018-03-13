@@ -6,7 +6,7 @@ from grpc import RpcError
 from aioetcd3.client import client
 from aioetcd3.help import range_all, range_prefix
 from aioetcd3.watch import EVENT_TYPE_CREATE,EVENT_TYPE_DELETE,EVENT_TYPE_MODIFY,\
-    CompactRevisonException
+    CompactRevisonException, WatchException
 
 
 def asynctest(f):
@@ -272,7 +272,7 @@ class WatchTest(unittest.TestCase):
             i = 0
             async with self.client.watch_scope('/foo') as response:
                 f1.set_result(None)
-                with self.assertRaises(RpcError):
+                with self.assertRaises(WatchException):
                     async for event in response:
                         i = i + 1
                         if i == 1:

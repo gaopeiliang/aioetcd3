@@ -1,5 +1,6 @@
 import asyncio
 
+from asyncio.futures import CancelledError
 from aioetcd3.base import StubMixin
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3._etcdv3 import kv_pb2 as kv
@@ -452,7 +453,10 @@ class Watch(StubMixin):
                 for _, fut in cancel_requests:
                     if fut is not None and not fut.done():
                         fut.set_result(True)
-            #raise
+
+            if exc is CancelledError:
+                raise
+
         finally:
             self._watch_task_running = None
     
@@ -518,6 +522,8 @@ class Watch(StubMixin):
                         continue
                     else:
                         raise
+                except CancelledError:
+                    raise
                 except Exception:
                     if always_reconnect:
                         continue

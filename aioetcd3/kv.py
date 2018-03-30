@@ -54,9 +54,9 @@ def _kv(request_builder, response_builder, method):
 def _create_txn_response_builder(success, fail, **kwargs):
     def _response_builder(response):
         if response.succeeded:
-            return True, [t[1](r) for t, r in zip(success, response.responses)]
+            return True, [t[1](_get_op_response(r)) for t, r in zip(success, response.responses)]
         else:
-            return False, [t[1](r) for t, r in zip(fail, response.responses)]
+            return False, [t[1](_get_op_response(r)) for t, r in zip(fail, response.responses)]
     return _response_builder
 
 
@@ -146,20 +146,20 @@ def _range_keys_response(response):
 def _delete_response(response, prev_kv=False, **kwargs):
     # when set prev_kv to return prev value,
     # but it is not existed , response has no prev_kvs
-    if prev_kv and hasattr(response, 'prev_kvs'):
+    if prev_kv:
         r = []
         for kv in response.prev_kvs:
-            r.append((kv.value, KVMetadata(kv)))
+            r.append((kv.key, kv.value, KVMetadata(kv)))
         return r
     else:
-        return []
+        return response.deleted
 
 
 def _put_response(response, prev_kv=False, **kwargs):
 
     # when set prev_kv to return prev value,
     # but it is not existed , response has no prev_kv
-    if prev_kv and hasattr(response, 'prev_kv'):
+    if prev_kv and response.HasField('prev_kv'):
         return response.prev_kv.value, KVMetadata(response.prev_kv)
     else:
         return None, None
@@ -168,10 +168,18 @@ def _put_response(response, prev_kv=False, **kwargs):
 def _create_op_request(request):
     if isinstance(request, rpc.PutRequest):
         return rpc.RequestOp(request_put=request)
-    if isinstance(request, rpc.RangeRequest):
+    elif isinstance(request, rpc.RangeRequest):
         return rpc.RequestOp(request_range=request)
-    if isinstance(request, rpc.DeleteRangeRequest):
+    elif isinstance(request, rpc.DeleteRangeRequest):
         return rpc.RequestOp(request_delete_range=request)
+    elif isinstance(request, rpc.TxnRequest):
+        return rpc.RequestOp(request_txn=request)
+    else:
+        raise TypeError("Unsupported request OP: " + repr(request))
+
+
+def _get_op_response(response):
+    return getattr(response, response.WhichOneof('response'))
 
 
 def _compare_request(compare, success, fail):

@@ -90,7 +90,8 @@ class KVTest(unittest.TestCase):
 
         value_list = await self.client.pop(key_range='/test8')
         self.assertEqual(len(value_list), 1)
-        self.assertEqual(value_list[0][0], b'8')
+        self.assertEqual(value_list[0][0], b'/test8')
+        self.assertEqual(value_list[0][1], b'8')
 
         value_list = await self.client.delete(key_range=range_prefix('/'), prev_kv=True)
         self.assertEqual(len(value_list), 8)
@@ -99,24 +100,43 @@ class KVTest(unittest.TestCase):
     async def test_transaction(self):
         await self.client.put('/trans1', 'trans1')
         await self.client.put('/trans2', 'trans2')
-
+        
         is_success, response = await self.client.txn(compare=[
             transaction.Value('/trans1') == b'trans1',
             transaction.Value('/trans2') == b'trans2'
         ], success=[
-            KV.delete.txn('/trans1'),
-            KV.put.txn('/trans3', 'trans3', prev_kv=True)
+            KV.get.txn('/trans1'),
+            KV.range.txn('/trans2')
         ], fail=[
             KV.delete.txn('/trans1')
         ])
 
         self.assertEqual(is_success, True)
         self.assertEqual(len(response), 2)
+        
+        self.assertEqual(response[0][0], b'trans1')
+        self.assertEqual(response[1][0][:2], (b'/trans2', b'trans2'))
+        
+        is_success, response = await self.client.txn(compare=[
+            transaction.Value('/trans1') == b'trans1',
+            transaction.Value('/trans2') == b'trans2'
+        ], success=[
+            KV.delete.txn('/trans1'),
+            KV.put.txn('/trans2', 'trans2', prev_kv=True),
+            KV.put.txn('/trans3', 'trans3', prev_kv=True)
+        ], fail=[
+            KV.delete.txn('/trans1')
+        ])
+
+        self.assertEqual(is_success, True)
+        self.assertEqual(len(response), 3)
         del_response = response[0]
-        self.assertEqual(len(del_response), 0)
+        self.assertEqual(del_response, 1)
         put_response = response[1]
+        self.assertEqual(put_response[0], b'trans2')
+        put_response = response[2]
+        # there is not pre_kv None
         self.assertIsNone(put_response[0])
-        self.assertIsNone(put_response[1])
 
         is_success, response = await self.client.txn(compare=[
             transaction.Value('/trans3') != b'trans3',
@@ -125,12 +145,13 @@ class KVTest(unittest.TestCase):
             transaction.Create('/trans3') != 200
         ], success=[
         ], fail=[
-            KV.delete.txn('/trans3')
+            KV.delete.txn('/trans3', prev_kv=True)
         ])
 
         self.assertEqual(is_success, False)
         self.assertEqual(len(response), 1)
-        self.assertEqual(len(response[0]), 0)
+        self.assertEqual(len(response[0]), 1)
+        self.assertEqual(response[0][0][:2], (b'/trans3', b'trans3'))
 
 if __name__ == '__main__':
     unittest.main()

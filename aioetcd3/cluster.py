@@ -60,23 +60,27 @@ class Cluster(StubMixin):
         for m in members:
 
             m = [u.rpartition("//")[2] for u in m]
-            server_endpoint = ipv4_endpoints(m)
-
-            if self._credentials:
-                channel = aiogrpc.secure_channel(server_endpoint, self._credentials, options=self._options,
-                                                 loop=self._loop, executor=self._executor,
-                                                 standalone_pool_for_streaming=True)
+            m = [u for u in m if u]
+            if m:
+                server_endpoint = ipv4_endpoints(m)
+    
+                if self._credentials:
+                    channel = aiogrpc.secure_channel(server_endpoint, self._credentials, options=self._options,
+                                                     loop=self._loop, executor=self._executor,
+                                                     standalone_pool_for_streaming=True)
+                else:
+                    channel = aiogrpc.insecure_channel(server_endpoint, options=self._options, loop=self._loop,
+                                                       executor=self._executor, standalone_pool_for_streaming=True)
+    
+                maintenance = Maintenance(channel=channel, timeout=2)
+                try:
+                    await maintenance.status()
+                except grpc.RpcError:
+                    unhealth_members.append(m)
+                else:
+                    health_members.append(m)
             else:
-                channel = aiogrpc.insecure_channel(server_endpoint, options=self._options, loop=self._loop,
-                                                   executor=self._executor, standalone_pool_for_streaming=True)
-
-            maintenance = Maintenance(channel=channel, timeout=2)
-            try:
-                await maintenance.status()
-            except grpc.RpcError:
                 unhealth_members.append(m)
-            else:
-                health_members.append(m)
 
         return health_members, unhealth_members
 

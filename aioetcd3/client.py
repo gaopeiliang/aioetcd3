@@ -25,6 +25,7 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
         super().__init__(channel, timeout)
 
     def update_server_list(self, endpoint):
+        self.close()
         channel = self._recreate_grpc_channel(endpoint)
         self._update_channel(channel)
 
@@ -66,6 +67,9 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
             channel = aiogrpc.insecure_channel(endpoint, options=self._options, loop=self._loop,
                                                executor=self._executor, standalone_pool_for_streaming=True)
         return channel
+    
+    def close(self):
+        return self.channel.close()
 
 
 def client(endpoint, grpc_options=None, timeout=None):

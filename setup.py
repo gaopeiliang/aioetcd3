@@ -34,7 +34,7 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
-        'aiogrpc',
+        'aiogrpc>=1.4',
         'protobuf'
     ]
 )

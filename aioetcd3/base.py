@@ -8,6 +8,7 @@ class StubMixin(object):
         self._update_channel(channel)
 
     def _update_channel(self, channel):
+        self.channel = channel
         self._loop = channel._loop
 
     def _update_cluster_info(self, header):

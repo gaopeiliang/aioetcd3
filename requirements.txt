@@ -1,1 +1,2 @@
 aiogrpc>=0.1
+protobuf

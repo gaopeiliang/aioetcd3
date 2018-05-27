@@ -71,14 +71,16 @@ class Cluster(StubMixin):
                 else:
                     channel = aiogrpc.insecure_channel(server_endpoint, options=self._options, loop=self._loop,
                                                        executor=self._executor, standalone_pool_for_streaming=True)
-    
-                maintenance = Maintenance(channel=channel, timeout=2)
                 try:
-                    await maintenance.status()
-                except grpc.RpcError:
-                    unhealth_members.append(m)
-                else:
-                    health_members.append(m)
+                    maintenance = Maintenance(channel=channel, timeout=2)
+                    try:
+                        await maintenance.status()
+                    except grpc.RpcError:
+                        unhealth_members.append(m)
+                    else:
+                        health_members.append(m)
+                finally:
+                    await channel.close()
             else:
                 unhealth_members.append(m)
 

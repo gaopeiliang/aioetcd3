@@ -18,7 +18,8 @@ TEST_ROLE_NAME = 'admin'
 
 
 class AuthTest(unittest.TestCase):
-    def setUp(self):
+    @asynctest
+    async def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
 
@@ -32,7 +33,7 @@ class AuthTest(unittest.TestCase):
                                         cert_file="test/cfssl/client.pem",
                                         key_file="test/cfssl/client-key.pem")
 
-        self.tearDown()
+        await self.cleanUp()
 
     @asynctest
     async def test_auth_1(self):
@@ -128,8 +129,7 @@ class AuthTest(unittest.TestCase):
         for r in roles:
             await self.root_client.role_delete(name=r)
 
-    @asynctest
-    async def tearDown(self):
+    async def cleanUp(self):
 
         await self.client.delete(range_all())
 
@@ -137,4 +137,8 @@ class AuthTest(unittest.TestCase):
 
         await self.delete_all_user()
         await self.delete_all_role()
-
+    
+    @asynctest
+    async def tearDown(self):
+        await self.cleanUp()
+        await self.client.close()

@@ -36,3 +36,6 @@ class ClusterTest(unittest.TestCase):
         self.assertTrue(healthy)
         self.assertFalse(unhealthy)
 
+    @asynctest
+    async def tearDown(self):
+        await self.client.close()

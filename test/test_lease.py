@@ -15,11 +15,12 @@ def asynctest(f):
 
 
 class LeaseTest(unittest.TestCase):
-    def setUp(self):
+    @asynctest
+    async def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
 
-        self.tearDown()
+        await self.cleanUp()
 
     @asynctest
     async def test_lease_1(self):
@@ -86,4 +87,8 @@ class LeaseTest(unittest.TestCase):
 
     @asynctest
     async def tearDown(self):
+        await self.cleanUp()
+        await self.client.close()
+    
+    async def cleanUp(self):
         await self.client.delete(range_all())

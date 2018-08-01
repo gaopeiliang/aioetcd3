@@ -18,10 +18,11 @@ def asynctest(f):
 
 
 class WatchTest(unittest.TestCase):
-    def setUp(self):
+    @asynctest
+    async def setUp(self):
         self.endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=self.endpoints)
-        self.tearDown()
+        await self.cleanUp()
 
     @asynctest
     async def test_watch_1(self):
@@ -323,6 +324,10 @@ class WatchTest(unittest.TestCase):
     
     @asynctest
     async def tearDown(self):
+        await self.cleanUp()
+        await self.client.close()
+        
+    async def cleanUp(self):
         await self.client.delete(range_all())
 
 

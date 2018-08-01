@@ -16,17 +16,22 @@ def asynctest(f):
 
 
 class KVTest(unittest.TestCase):
-
-    def setUp(self):
+    
+    @asynctest
+    async def setUp(self):
         endpoints = "127.0.0.1:2379"
         self.client = client(endpoint=endpoints)
         endpoints = "127.0.0.1:2379"
         self.client.update_server_list(endpoint=endpoints)
-        self.tearDown()
-
+        await self.cleanUp()
+    
+    async def cleanUp(self):
+        await self.client.delete(key_range=range_all())
+    
     @asynctest
     async def tearDown(self):
-        await self.client.delete(key_range=range_all())
+        await self.cleanUp()
+        await self.client.close()
 
     @asynctest
     async def test_put_get(self):

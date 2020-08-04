@@ -1,6 +1,6 @@
 import asyncio
 
-from asyncio.futures import CancelledError
+from asyncio import CancelledError
 from aioetcd3.base import StubMixin
 from aioetcd3._etcdv3 import rpc_pb2 as rpc
 from aioetcd3._etcdv3 import kv_pb2 as kv

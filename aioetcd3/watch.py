@@ -158,6 +158,8 @@ async def _select(pipes, futures, *, loop=None):
             p.cancel()
             try:
                 await p
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
     return [p for p in pipes if not p.is_empty()], [f for f in futures if f.done()]
@@ -420,6 +422,8 @@ class Watch(StubMixin):
                         self._watch_task_running = None
                     try:
                         await call_task
+                    except asyncio.CancelledError:
+                        pass
                     except Exception:
                         pass
         except Exception as exc:
@@ -456,6 +460,8 @@ class Watch(StubMixin):
 
             if exc is CancelledError:
                 raise
+        except asyncio.CancelledError:
+            raise
 
         finally:
             self._watch_task_running = None

@@ -46,7 +46,7 @@ class RLease(object):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if hasattr(self, 'refresh_task'):
             self.refresh_task.cancel()
-            asyncio.wait(self.refresh_task)
+            await asyncio.wait([self.refresh_task])
         await self.revoke()
 
     async def revoke(self):

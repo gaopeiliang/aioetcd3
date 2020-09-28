@@ -72,7 +72,7 @@ class Cluster(StubMixin):
                     channel = aiogrpc.insecure_channel(server_endpoint, options=self._options, loop=self._loop,
                                                        executor=self._executor, standalone_pool_for_streaming=True)
                 try:
-                    maintenance = Maintenance(channel=channel, timeout=2)
+                    maintenance = Maintenance(channel=channel, timeout=2, username=self.username, password=self.password)
                     try:
                         await maintenance.status()
                     except grpc.RpcError:

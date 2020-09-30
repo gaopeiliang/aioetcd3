@@ -87,8 +87,13 @@ class Lease(StubMixin):
             for re in [request]:
                 yield re
 
+        await self._authenticate_if_needed()
         new_lease = None
-        async with self._lease_stub.LeaseKeepAlive.with_scope(generate_request(lease_request)) as result:
+        async with self._lease_stub.LeaseKeepAlive.with_scope(
+            generate_request(lease_request),
+            credentials=self._call_credentials,
+            metadata=self._metadata
+        ) as result:
             async for r in result:
                 self._update_cluster_info(r.header)
                 new_lease = RLease(r.TTL, r.ID, self)

@@ -4,9 +4,11 @@ import asyncio
 from grpc import RpcError
 
 from aioetcd3.client import client
-from aioetcd3.help import range_all, range_prefix
+from aioetcd3.help import range_all, range_prefix, PER_RW
 from aioetcd3.watch import EVENT_TYPE_CREATE,EVENT_TYPE_DELETE,EVENT_TYPE_MODIFY,\
     CompactRevisonException, WatchException
+
+from .utils import switch_auth_off, switch_auth_on
 
 
 def asynctest(f):
@@ -24,9 +26,9 @@ class WatchTest(unittest.TestCase):
         self.client = client(endpoint=self.endpoints)
         await self.cleanUp()
 
-    @asynctest
-    async def test_watch_1(self):
+    async def common_watch1(self):
         f1 = asyncio.get_event_loop().create_future()
+
         async def watch_1():
             i = 0
             async with self.client.watch_scope('/foo') as response:
@@ -49,6 +51,7 @@ class WatchTest(unittest.TestCase):
                         break
 
         f2 = asyncio.get_event_loop().create_future()
+
         async def watch_2():
             i = 0
             async for event in self.client.watch('/foo', prev_kv=True, create_event=True):
@@ -73,6 +76,7 @@ class WatchTest(unittest.TestCase):
                     break
 
         f3 = asyncio.get_event_loop().create_future()
+
         async def watch_3():
             i = 0
             async for event in self.client.watch('/foo', prev_kv=True, noput=True, create_event=True):
@@ -88,6 +92,7 @@ class WatchTest(unittest.TestCase):
                     break
 
         f4 = asyncio.get_event_loop().create_future()
+
         async def watch_4():
             i = 0
             async for event in self.client.watch('/foo', prev_kv=True, nodelete=True, create_event=True):
@@ -123,9 +128,13 @@ class WatchTest(unittest.TestCase):
             t.result()
 
     @asynctest
-    async def test_watch_reconnect(self):
+    async def test_watch_1(self):
+        await self.common_watch1()
+
+    async def watch_reconnect(self):
         f1 = asyncio.get_event_loop().create_future()
         f2 = asyncio.get_event_loop().create_future()
+
         async def watch_1():
             i = 0
             async with self.client.watch_scope('/foo') as response:
@@ -147,6 +156,7 @@ class WatchTest(unittest.TestCase):
                         # delete event has no value
                         # self.assertEqual(event.value, b'foo1')
                         break
+
         t1 = asyncio.ensure_future(watch_1())
         await f1
         await self.client.put('/foo', 'foo')
@@ -155,9 +165,12 @@ class WatchTest(unittest.TestCase):
         await self.client.put('/foo', 'foo1')
         await self.client.delete('/foo')
         await t1
-    
+
     @asynctest
-    async def test_watch_create_cancel(self):
+    async def test_watch_reconnect(self):
+        await self.watch_reconnect()
+
+    async def watch_create_cancel(self):
         async def watch_1():
             async with self.client.watch_scope('/foo') as _:
                 pass
@@ -184,9 +197,13 @@ class WatchTest(unittest.TestCase):
         self.assertIsNone(self.client._watch_task_running)
     
     @asynctest
-    async def test_batch_events(self):
+    async def test_watch_create_cancel(self):
+        await self.watch_create_cancel()
+
+    async def batch_events(self):
         f1 = asyncio.get_event_loop().create_future()
         f2 = asyncio.get_event_loop().create_future()
+
         def _check_event(e, criterias):
             if criterias[0]:
                 self.assertEqual(e.type, criterias[0])
@@ -194,28 +211,29 @@ class WatchTest(unittest.TestCase):
                 self.assertEqual(e.key, criterias[1])
             if criterias[2]:
                 self.assertEqual(e.value, criterias[2])
+
         async def watch_1():
             asserts = [(EVENT_TYPE_CREATE, b'/foo/1', b'1'),
                        (EVENT_TYPE_CREATE, b'/foo/2', b'2'),
                        (EVENT_TYPE_MODIFY, b'/foo/1', b'2'),
                        (EVENT_TYPE_MODIFY, b'/foo/2', b'3'),
-                       (EVENT_TYPE_DELETE, b'/foo/1',None),
-                       (EVENT_TYPE_DELETE, b'/foo/2',None)]
+                       (EVENT_TYPE_DELETE, b'/foo/1', None),
+                       (EVENT_TYPE_DELETE, b'/foo/2', None)]
             async with self.client.watch_scope(range_prefix('/foo/')) as response:
                 f1.set_result(None)
                 async for e in response:
                     _check_event(e, asserts.pop(0))
                     if not asserts:
                         break
-        
+
         async def watch_2():
             asserts = [((EVENT_TYPE_CREATE, b'/foo/1', b'1'),
-                       (EVENT_TYPE_CREATE, b'/foo/2', b'2'),),
+                        (EVENT_TYPE_CREATE, b'/foo/2', b'2'),),
                        ((EVENT_TYPE_MODIFY, b'/foo/1', b'2'),),
                        ((EVENT_TYPE_MODIFY, b'/foo/2', b'3'),),
-                       ((EVENT_TYPE_DELETE, b'/foo/1',None),
-                       (EVENT_TYPE_DELETE, b'/foo/2',None))]
-            async with self.client.watch_scope(range_prefix('/foo/'), batch_events=True)\
+                       ((EVENT_TYPE_DELETE, b'/foo/1', None),
+                        (EVENT_TYPE_DELETE, b'/foo/2', None))]
+            async with self.client.watch_scope(range_prefix('/foo/'), batch_events=True) \
                     as response:
                 f2.set_result(None)
                 async for es in response:
@@ -225,20 +243,23 @@ class WatchTest(unittest.TestCase):
                         _check_event(e, a)
                     if not asserts:
                         break
-        
+
         t1 = asyncio.ensure_future(watch_1())
         t2 = asyncio.ensure_future(watch_2())
-        await asyncio.wait_for(asyncio.wait([f1,f2]), 2)
-        self.assertTrue((await self.client.txn([],[self.client.put.txn('/foo/1', '1'),
-                                  self.client.put.txn('/foo/2', '2')],[]))[0])
+        await asyncio.wait_for(asyncio.wait([f1, f2]), 2)
+        self.assertTrue((await self.client.txn([], [self.client.put.txn('/foo/1', '1'),
+                                                    self.client.put.txn('/foo/2', '2')], []))[0])
         await self.client.put('/foo/1', '2')
         await self.client.put('/foo/2', '3')
-        self.assertTrue((await self.client.txn([],[self.client.delete.txn('/foo/1'),
-                                  self.client.delete.txn('/foo/2')],[]))[0])        
+        self.assertTrue((await self.client.txn([], [self.client.delete.txn('/foo/1'),
+                                                    self.client.delete.txn('/foo/2')], []))[0])
         await asyncio.gather(t1, t2)
     
     @asynctest
-    async def test_compact_revision(self):
+    async def test_batch_events(self):
+        await self.batch_events()
+
+    async def compact_revision(self):
         await self.client.put('/foo', '1')
         first_revision = self.client.last_response_info.revision
         await self.client.put('/foo', '2')
@@ -247,13 +268,14 @@ class WatchTest(unittest.TestCase):
         await self.client.put('/foo', '5')
         compact_revision = self.client.last_response_info.revision
         await self.client.compact(compact_revision, True)
+
         async def watch_1():
-                async with self.client.watch_scope('/foo', start_revision=first_revision) as response:
-                    with self.assertRaises(CompactRevisonException) as cm:
-                        async for e in response:
-                            raise ValueError("Not raised")
-                    self.assertEqual(cm.exception.revision, compact_revision)
-        
+            async with self.client.watch_scope('/foo', start_revision=first_revision) as response:
+                with self.assertRaises(CompactRevisonException) as cm:
+                    async for e in response:
+                        raise ValueError("Not raised")
+                self.assertEqual(cm.exception.revision, compact_revision)
+
         async def watch_2():
             async with self.client.watch_scope('/foo', ignore_compact=True, start_revision=first_revision) as responses:
                 async for e in responses:
@@ -262,13 +284,18 @@ class WatchTest(unittest.TestCase):
                     self.assertEqual(e.value, b'5')
                     self.assertEqual(e.revision, compact_revision)
                     break
+
         await watch_1()
         await watch_2()
 
     @asynctest
-    async def test_watch_exception(self):
+    async def test_compact_revision(self):
+        await self.compact_revision()
+
+    async def watch_exception(self):
         f1 = asyncio.get_event_loop().create_future()
         f2 = asyncio.get_event_loop().create_future()
+
         async def watch_1():
             i = 0
             async with self.client.watch_scope('/foo') as response:
@@ -283,8 +310,10 @@ class WatchTest(unittest.TestCase):
                             f2.set_result(None)
                         elif i == 2:
                             raise ValueError("Not raised")
+
         f3 = asyncio.get_event_loop().create_future()
         f4 = asyncio.get_event_loop().create_future()
+
         async def watch_2():
             i = 0
             async with self.client.watch_scope('/foo', always_reconnect=True) as response:
@@ -306,6 +335,7 @@ class WatchTest(unittest.TestCase):
                         # delete event has no value
                         # self.assertEqual(event.value, b'foo1')
                         break
+
         t1 = asyncio.ensure_future(watch_1())
         t2 = asyncio.ensure_future(watch_2())
         await f1
@@ -321,6 +351,51 @@ class WatchTest(unittest.TestCase):
         await self.client.delete('/foo')
         await t1
         await t2
+
+    @asynctest
+    async def test_watch_exception(self):
+        await self.watch_exception()
+
+    async def _run_test_with_auth(self, test):
+        default_client = self.client
+        await switch_auth_on(default_client)
+        root_client = client(endpoint=self.endpoints, username="root", password="root")
+        await root_client.role_grant_permission(name='client', key_range=range_prefix('/foo'), permission=PER_RW)
+        self.client = client(endpoint=self.endpoints, username="client", password="client")
+        try:
+            await test()
+        finally:
+            await switch_auth_off(
+                root_client,
+                default_client
+            )
+            await root_client.close()
+            await self.client.close()
+            self.client = default_client
+
+    @asynctest
+    async def test_watch1_with_auth(self):
+        await self._run_test_with_auth(self.common_watch1)
+
+    @asynctest
+    async def test_watch_reconnect_with_auth(self):
+        await self._run_test_with_auth(self.watch_reconnect)
+
+    @asynctest
+    async def test_watch_create_cancel_with_auth(self):
+        await self._run_test_with_auth(self.watch_create_cancel)
+
+    @asynctest
+    async def test_batch_events_with_auth(self):
+        await self._run_test_with_auth(self.batch_events)
+
+    @asynctest
+    async def test_compact_revision_with_auth(self):
+        await self._run_test_with_auth(self.compact_revision)
+
+    @asynctest
+    async def test_watch_exception_with_auth(self):
+        await self._run_test_with_auth(self.watch_exception)
     
     @asynctest
     async def tearDown(self):

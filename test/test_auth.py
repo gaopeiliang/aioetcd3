@@ -6,6 +6,8 @@ from aioetcd3.client import client, ssl_client, set_grpc_cipher
 from aioetcd3.help import range_all, PER_RW
 from aioetcd3.exceptions import AuthError, Unauthenticated, PermissionDenied
 
+from .utils import switch_auth_off, switch_auth_on
+
 
 def asynctest(f):
     @functools.wraps(f)
@@ -153,21 +155,11 @@ class PasswordAuthTest(unittest.TestCase):
         self.endpoints = "127.0.0.1:2379"
         self.unauthenticated_client = client(endpoint=self.endpoints)
         await self.cleanUp()
-        await self.prepare_users_and_roles()
+        await switch_auth_on(self.unauthenticated_client)
         self.client_client = client(
             endpoint=self.endpoints, username="client", password="client"
         )
         self.root_client = client(endpoint=self.endpoints, username="root", password="root")
-
-    async def prepare_users_and_roles(self):
-        await self.unauthenticated_client.user_add(username="root", password="root")
-        await self.unauthenticated_client.role_add(name='root')
-        await self.unauthenticated_client.user_grant_role(username='root', role='root')
-
-        await self.unauthenticated_client.user_add(username='client', password='client')
-        await self.unauthenticated_client.role_add(name='client')
-        await self.unauthenticated_client.user_grant_role(username='client', role='client')
-        await self.unauthenticated_client.auth_enable()
 
     async def create_kv_for_test(self):
         await self.root_client.put('/foo', '/foo')
@@ -208,30 +200,12 @@ class PasswordAuthTest(unittest.TestCase):
         with self.assertRaises(Unauthenticated) as exc:
             await new_client.get("/foo")
 
-    async def delete_all_users(self):
-        # It's necessary to use unauthenticated client here, because root user
-        # cannot be deleted when the auth is enabled
-        users = await self.unauthenticated_client.user_list()
-
-        for u in users:
-            await self.unauthenticated_client.user_delete(username=u)
-
-    async def delete_all_roles(self):
-        # It's necessary to use unauthenticated client here, because root user
-        # cannot be deleted when the auth is enabled
-        roles = await self.unauthenticated_client.role_list()
-
-        for r in roles:
-            await self.unauthenticated_client.role_delete(name=r)
-
     async def cleanUp(self):
         await self.unauthenticated_client.delete(range_all())
-        await self.delete_all_users()
-        await self.delete_all_roles()
 
     @asynctest
     async def tearDown(self):
-        await self.root_client.auth_disable()
+        await switch_auth_off(self.root_client, self.unauthenticated_client)
         await self.cleanUp()
 
 
@@ -244,22 +218,12 @@ class PasswordAuthWithSslTest(unittest.TestCase):
             ca_file="test/cfssl/ca.pem",
         )
         await self.cleanUp()
-        await self.prepare_users_and_roles()
+        await switch_auth_on(self.unauthenticated_client)
         self.root_client = ssl_client(endpoint=self.endpoints, ca_file="test/cfssl/ca.pem",
                                       username="root", password="root")
 
         self.client_client = ssl_client(endpoint=self.endpoints, ca_file="test/cfssl/ca.pem",
                                         username="client", password="client")
-
-    async def prepare_users_and_roles(self):
-        await self.unauthenticated_client.user_add(username="root", password="root")
-        await self.unauthenticated_client.role_add(name='root')
-        await self.unauthenticated_client.user_grant_role(username='root', role='root')
-
-        await self.unauthenticated_client.user_add(username='client', password='client')
-        await self.unauthenticated_client.role_add(name='client')
-        await self.unauthenticated_client.user_grant_role(username='client', role='client')
-        await self.unauthenticated_client.auth_enable()
 
     async def create_kv_for_test(self):
         await self.root_client.put('/foo', '/foo')
@@ -306,28 +270,10 @@ class PasswordAuthWithSslTest(unittest.TestCase):
         with self.assertRaises(Unauthenticated) as exc:
             await new_client.get("/foo")
 
-    async def delete_all_users(self):
-        # It's necessary to use unauthenticated client here, because root user
-        # cannot be deleted when the auth is enabled
-        users = await self.unauthenticated_client.user_list()
-
-        for u in users:
-            await self.unauthenticated_client.user_delete(username=u)
-
-    async def delete_all_roles(self):
-        # It's necessary to use unauthenticated client here, because root user
-        # cannot be deleted when the auth is enabled
-        roles = await self.unauthenticated_client.role_list()
-
-        for r in roles:
-            await self.unauthenticated_client.role_delete(name=r)
-
     async def cleanUp(self):
         await self.unauthenticated_client.delete(range_all())
-        await self.delete_all_users()
-        await self.delete_all_roles()
 
     @asynctest
     async def tearDown(self):
-        await self.root_client.auth_disable()
+        await switch_auth_off(self.root_client, self.unauthenticated_client)
         await self.cleanUp()

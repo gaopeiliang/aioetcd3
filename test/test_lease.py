@@ -3,7 +3,9 @@ import asyncio
 import functools
 
 from aioetcd3.client import client
-from aioetcd3.help import range_all
+from aioetcd3.help import range_all, range_prefix, PER_RW
+
+from .utils import switch_auth_on, switch_auth_off
 
 
 def asynctest(f):
@@ -17,13 +19,12 @@ def asynctest(f):
 class LeaseTest(unittest.TestCase):
     @asynctest
     async def setUp(self):
-        endpoints = "127.0.0.1:2379"
-        self.client = client(endpoint=endpoints)
+        self.endpoints = "127.0.0.1:2379"
+        self.client = client(endpoint=self.endpoints)
 
         await self.cleanUp()
 
-    @asynctest
-    async def test_lease_1(self):
+    async def _lease_1(self):
         lease = await self.client.grant_lease(ttl=5)
         self.assertEqual(lease.ttl, 5)
 
@@ -42,7 +43,10 @@ class LeaseTest(unittest.TestCase):
         self.assertEqual(len(keys), 0)
 
     @asynctest
-    async def test_lease_2(self):
+    async def test_lease_1(self):
+        await self._lease_1()
+
+    async def _lease_2(self):
         lease = await self.client.grant_lease(ttl=5)
         self.assertEqual(lease.ttl, 5)
 
@@ -68,9 +72,11 @@ class LeaseTest(unittest.TestCase):
         self.assertIsNone(lease)
         self.assertEqual(len(keys), 0)
 
-
     @asynctest
-    async def test_lease_3(self):
+    async def test_lease_2(self):
+        await self._lease_2()
+
+    async def _lease_3(self):
         lease = await self.client.grant_lease(ttl=5)
         self.assertEqual(lease.ttl, 5)
 
@@ -84,6 +90,39 @@ class LeaseTest(unittest.TestCase):
         value, meta = await self.client.get('/testlease')
         self.assertIsNone(value)
         self.assertIsNone(meta)
+
+    @asynctest
+    async def test_lease_3(self):
+        await self._lease_3()
+
+    async def _run_test_with_auth(self, test):
+        default_client = self.client
+        await switch_auth_on(default_client)
+        root_client = client(endpoint=self.endpoints, username="root", password="root")
+        await root_client.role_grant_permission(name='client', key_range=range_prefix('/testlease'), permission=PER_RW)
+        self.client = client(endpoint=self.endpoints, username="client", password="client")
+        try:
+            await test()
+        finally:
+            await switch_auth_off(
+                root_client,
+                default_client
+            )
+            await root_client.close()
+            await self.client.close()
+            self.client = default_client
+
+    @asynctest
+    async def test_lease_1_with_auth(self):
+        await self._run_test_with_auth(self._lease_1)
+
+    @asynctest
+    async def test_lease_2_with_auth(self):
+        await self._run_test_with_auth(self._lease_2)
+
+    @asynctest
+    async def test_lease_3_with_auth(self):
+        await self._run_test_with_auth(self._lease_3)
 
     @asynctest
     async def tearDown(self):

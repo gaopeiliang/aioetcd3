@@ -205,8 +205,12 @@ class Watch(StubMixin):
                 if n is None:
                     break
                 yield n
+
         async def watch_call(input_queue, watch_stub, output_pipe):
-            async with watch_stub.Watch.with_scope(input_iterator(input_queue)) as response_iter:
+            await self._authenticate_if_needed()
+            async with watch_stub.Watch.with_scope(
+                    input_iterator(input_queue), credentials=self._call_credentials, metadata=self._metadata
+            ) as response_iter:
                 async for r in response_iter:
                     await output_pipe.put(r)
         last_received_revision = None

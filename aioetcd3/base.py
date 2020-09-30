@@ -49,12 +49,7 @@ class StubMixin(object):
     def get_cluster_info(self):
         return self.last_response_info
 
-    async def grpc_call(self, stub_func, request, timeout=_default_timeout, skip_auth=False):
-        if timeout is _default_timeout:
-            timeout = self.timeout
-
-        # If the username and password are set, trying to call the auth.authenticate
-        # method to get the auth token. If the token already received - just use it.
+    async def _authenticate_if_needed(self, skip_auth=False):
         if self.username is not None and self.password is not None and not skip_auth:
             if self._metadata is None:  # We need to call self._authenticate for the first rpc call only
                 try:
@@ -63,6 +58,14 @@ class StubMixin(object):
                     if exc._state.code == StatusCode.INVALID_ARGUMENT:
                         raise AuthError(exc._state.details, exc._state.debug_error_string)
                     raise exc
+
+    async def grpc_call(self, stub_func, request, timeout=_default_timeout, skip_auth=False):
+        if timeout is _default_timeout:
+            timeout = self.timeout
+
+        # If the username and password are set, trying to call the auth.authenticate
+        # method to get the auth token. If the token already received - just use it.
+        await self._authenticate_if_needed(skip_auth=skip_auth)
 
         try:
             response = await stub_func(

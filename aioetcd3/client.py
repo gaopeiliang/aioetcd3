@@ -1,5 +1,6 @@
 import aiogrpc
 import os
+import logging
 from aiogrpc.channel import Channel
 from aioetcd3.kv import KV
 from aioetcd3.lease import Lease
@@ -9,11 +10,14 @@ from aioetcd3.maintenance import Maintenance
 from aioetcd3.cluster import Cluster
 from aioetcd3.utils import get_secure_creds
 
+logger = logging.getLogger(__name__)
+
 
 class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
     def __init__(self, endpoint, ssl=False,
                  ca_cert=None, cert_key=None, cert_cert=None,
-                 default_ca=False, grpc_options = None, timeout=5,
+                 default_ca=False, grpc_options=None, timeout=5,
+                 username=None, password=None,
                  *, loop=None, executor=None):
         channel = self._create_grpc_channel(endpoint=endpoint, ssl=ssl,
                                             ca_cert=ca_cert,
@@ -22,7 +26,9 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
                                             options=grpc_options,
                                             loop=loop,
                                             executor=executor)
-        super().__init__(channel, timeout)
+        if cert_key and cert_cert and username and password:
+            logger.warning("Certificate and password authentication methods are used simultaneously")
+        super().__init__(channel, timeout, username=username, password=password)
 
     def update_server_list(self, endpoint):
         self.close()
@@ -41,6 +47,8 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
                 ca_cert = None
             else:
                 if ca_cert is None:
+                    logger.warning("Certificate authority is not specified. Empty CA will be used. To use system CA set"
+                                   " `default_ca=True`")
                     ca_cert = ''
 
             # to ensure ssl connect , set grpc env
@@ -59,6 +67,8 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
         return channel
 
     def _recreate_grpc_channel(self, endpoint):
+        self._call_credentials = None
+        self._metadata = None
         if self._credentials:
             channel = aiogrpc.secure_channel(endpoint, self._credentials, options=self._options,
                                              loop=self._loop, executor=self._executor,
@@ -72,17 +82,18 @@ class Client(KV, Lease, Auth, Watch, Maintenance, Cluster):
         return self.channel.close()
 
 
-def client(endpoint, grpc_options=None, timeout=None):
+def client(endpoint, grpc_options=None, timeout=None, username=None, password=None):
 
     # user `ip:port,ip:port` to user grpc balance
-    return Client(endpoint, grpc_options=grpc_options, timeout=timeout)
+    return Client(endpoint, grpc_options=grpc_options, username=username, password=password, timeout=timeout)
 
 
 def ssl_client(endpoint, ca_file=None, cert_file=None, key_file=None, default_ca=False, grpc_options=None,
-               timeout=None):
+               timeout=None, username=None, password=None):
     ca, key, cert = get_secure_creds(ca_cert=ca_file, cert_cert=cert_file, cert_key=key_file)
     return Client(endpoint, ssl=True, ca_cert=ca, cert_key=key, cert_cert=cert,
-                  default_ca=default_ca, grpc_options=grpc_options, timeout=timeout)
+                  default_ca=default_ca, grpc_options=grpc_options, timeout=timeout,
+                  username=username, password=password)
 
 
 def set_grpc_cipher(enable_rsa=True, enable_ecdsa=True, ciphers=None):

@@ -7,12 +7,12 @@ from aioetcd3.utils import put_key_range
 import aioetcd3._etcdv3.rpc_pb2_grpc as stub
 
 
-def call_grpc(request, response_func, method):
+def call_grpc(request, response_func, method, skip_auth=False):
 
     def _f(f):
         @functools.wraps(f)
         async def call(self, *args, **kwargs):
-            r = await self.grpc_call(method(self), request(*args, **kwargs))
+            r = await self.grpc_call(method(self), request(*args, **kwargs), skip_auth=skip_auth)
             return response_func(r)
 
         return call
@@ -33,8 +33,9 @@ class Auth(StubMixin):
     async def auth_disable(self):
         pass
 
+    # The method should be called without password authentication to avoid the infinite recursion
     @call_grpc(lambda username, password: rpc.AuthenticateRequest(name=username, password=password),
-               lambda r: r.token, lambda s: s._auth_stub.Authenticate)
+               lambda r: r.token, lambda s: s._auth_stub.Authenticate, skip_auth=True)
     async def authenticate(self, username, password):
         pass
 

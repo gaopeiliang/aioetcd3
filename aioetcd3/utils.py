@@ -66,8 +66,16 @@ def dns_endpoint(dns_name):
 
 
 def get_secure_creds(ca_cert, cert_key, cert_cert):
-    with open(ca_cert, 'rb') as ca_cert_file:
+    ca_cert_value = None
+    cert_key_value = None
+    cert_value = None
+    if ca_cert is not None:
+        with open(ca_cert, 'rb') as ca_cert_file:
+            ca_cert_value = ca_cert_file.read()
+    if cert_key is not None:
         with open(cert_key, 'rb') as cert_key_file:
-            with open(cert_cert, 'rb') as cert_cert_file:
-                return ca_cert_file.read(), cert_key_file.read(), cert_cert_file.read()
-
+            cert_key_value = cert_key_file.read()
+    if cert_cert is not None:
+        with open(cert_cert, 'rb') as cert_cert_file:
+            cert_value = cert_cert_file.read()
+    return ca_cert_value, cert_key_value, cert_value
